@@ -1,0 +1,34 @@
+# Blueprint do Render. Ao vincular o repo em "New > Blueprint", o Render le
+# este arquivo e cria o servico. Segredos ficam com sync: false — o Render
+# pergunta o valor no dashboard e nunca vem versionado aqui.
+services:
+  - type: web
+    name: compresearakitfesta-middleware-checkout
+    runtime: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      # PORT o Render injeta sozinho; o app le process.env.PORT.
+      - key: VTEX_APPKEY
+        sync: false
+      - key: VTEX_APPTOKEN
+        sync: false
+      - key: VTEX_ACCOUNT
+        sync: false
+      - key: VTEX_BASE_URL
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

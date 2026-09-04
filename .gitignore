@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+
+# Nunca commitar credenciais reais
+.env
+.env.*
+.env.example
+
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
