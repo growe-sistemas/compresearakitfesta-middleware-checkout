@@ -1,4 +1,10 @@
+import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
+
+// Carrega o .env ANTES de validar. Nao sobrescreve variavel ja definida no
+// ambiente, entao no Render (onde nao ha .env) isso e um no-op e as variaveis
+// do dashboard continuam mandando.
+loadDotenv();
 
 /**
  * Schema das variaveis de ambiente. Validado uma unica vez no boot:

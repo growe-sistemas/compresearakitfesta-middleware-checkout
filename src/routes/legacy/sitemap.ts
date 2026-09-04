@@ -24,7 +24,8 @@ const POST_FIELDS = [
 const typeParams = z.object({ type: z.string().optional() });
 
 /**
- * sitemap (`/_v/sitemap/:type?`) — porte de `middlewares/sitemap.ts`.
+ * sitemap (`/middleware/checkout/sitemap/:type?`, era `/_v/sitemap/:type?`) —
+ * porte de `middlewares/sitemap.ts`.
  *
  * `products` e `posts` geram o urlset correspondente; qualquer outro valor
  * (inclusive ausente) devolve o indice.

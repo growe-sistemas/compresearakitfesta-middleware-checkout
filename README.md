@@ -56,6 +56,10 @@ npm run typecheck
 Validadas com zod **no boot**: falta ou valor inválido derruba o processo antes
 de abrir a porta, com a lista do que está errado no stderr.
 
+Localmente o arquivo `.env` na raiz do projeto é carregado automaticamente
+(dotenv). Ele **não sobrescreve** variável já definida no ambiente, então no
+Render — onde não existe `.env` — quem manda são as variáveis do dashboard.
+
 ### Obrigatórias
 
 | Variável | Descrição |
@@ -152,6 +156,12 @@ para [`src/routes/legacy/manifest.ts`](src/routes/legacy/manifest.ts) — path e
 verbo **exatamente** como no original — e registradas em
 [`src/routes/legacy/index.ts`](src/routes/legacy/index.ts).
 
+**Os paths foram renomeados**: o prefixo `/_v1/private/middleware/` do VTEX IO
+virou `/middleware/checkout/`. O nome de cada rota e o resto do path seguem
+idênticos, então migrar o front é um find-and-replace do prefixo.
+`/_v1/make-cluster-alive` e `/_v/sitemap` também foram para baixo do mesmo
+prefixo.
+
 A **lógica de cada uma foi portada** dos handlers originais em
 `kitfesta-seara/node/middlewares/`. O que mudou de infraestrutura:
 
@@ -168,22 +178,22 @@ aceita qualquer verbo no VTEX IO. Foi copiado assim em vez de assumir `GET`.
 
 | Rota | Método | Auth | Path | Handler original |
 | --- | --- | --- | --- | --- |
-| `makeClusterAlive` | ALL | pública | `/_v1/make-cluster-alive` | `makeClusterAlive.ts` |
-| `getAddressPosition` | ALL | pública | `/_v1/private/middleware/getAddressPosition/` | `getAddressPosition.ts` |
-| `getAddresState` | ALL | pública | `/_v1/private/middleware/getAddresState/` | `getAddresState.ts` |
-| `getDataSintegraRF` | ALL | pública | `/_v1/private/middleware/getDataSintegraRF/:cnpj` | `getDataSintegraRF.ts` |
-| `getDataSintegraSN` | ALL | pública | `/_v1/private/middleware/getDataSintegraSN/:cnpj` | `getDataSintegraSN.ts` |
-| `getDataSintegraST` | ALL | pública | `/_v1/private/middleware/getDataSintegraST/:cnpj` | `getDataSintegraST.ts` |
-| `getDataSintegraCPF` | ALL | pública | `/_v1/private/middleware/getDataSintegraCPF/:cpf/:date` | `getDataSintegraCPF.ts` |
-| `getEmployee` | ALL | pública | `/_v1/private/middleware/getEmployee/:cpf` | `getEmployee.ts` |
-| `getDataRamdom` | ALL | pública | `/_v1/private/middleware/getDataRamdom/` | `getDataRamdom.ts` |
-| `getBirthDateCL` | ALL | pública | `/_v1/private/middleware/getInfo/:email` | `getBirthDateCL.ts` |
-| `setBirthDateCL` | ALL | pública | `/_v1/private/middleware/setInfo/:email/:birthDate` | `setBirthDateCL.ts` |
-| `updateDataMD` | POST | pública | `/_v1/private/middleware/md/update` | `updateDataMD.ts` |
-| `createGiftCard` | POST | 🔑 `x-api-key` | `/_v1/private/middleware/createGiftCard/` | `generateUniqueGiftCardInfos.ts` → `createGiftCard.ts` → `addGiftCardBalance.ts` |
-| `getGiftCardInfoFromMD` | ALL | pública | `/_v1/private/middleware/getGiftCardInfoFromMD/` | `getGiftInfoFromMD.ts` |
-| `getDataInMasterData` | POST | pública | `/_v1/private/middleware/getDataInMasterData` | `getDataInMasterData.ts` |
-| `sitemap` | GET | pública | `/_v/sitemap/:type?` | `sitemap.ts` |
+| `makeClusterAlive` | ALL | pública | `/middleware/checkout/make-cluster-alive` | `makeClusterAlive.ts` |
+| `getAddressPosition` | ALL | pública | `/middleware/checkout/getAddressPosition/` | `getAddressPosition.ts` |
+| `getAddresState` | ALL | pública | `/middleware/checkout/getAddresState/` | `getAddresState.ts` |
+| `getDataSintegraRF` | ALL | pública | `/middleware/checkout/getDataSintegraRF/:cnpj` | `getDataSintegraRF.ts` |
+| `getDataSintegraSN` | ALL | pública | `/middleware/checkout/getDataSintegraSN/:cnpj` | `getDataSintegraSN.ts` |
+| `getDataSintegraST` | ALL | pública | `/middleware/checkout/getDataSintegraST/:cnpj` | `getDataSintegraST.ts` |
+| `getDataSintegraCPF` | ALL | pública | `/middleware/checkout/getDataSintegraCPF/:cpf/:date` | `getDataSintegraCPF.ts` |
+| `getEmployee` | ALL | pública | `/middleware/checkout/getEmployee/:cpf` | `getEmployee.ts` |
+| `getDataRamdom` | ALL | pública | `/middleware/checkout/getDataRamdom/` | `getDataRamdom.ts` |
+| `getBirthDateCL` | ALL | pública | `/middleware/checkout/getInfo/:email` | `getBirthDateCL.ts` |
+| `setBirthDateCL` | ALL | pública | `/middleware/checkout/setInfo/:email/:birthDate` | `setBirthDateCL.ts` |
+| `updateDataMD` | POST | pública | `/middleware/checkout/md/update` | `updateDataMD.ts` |
+| `createGiftCard` | POST | 🔑 `x-api-key` | `/middleware/checkout/createGiftCard/` | `generateUniqueGiftCardInfos.ts` → `createGiftCard.ts` → `addGiftCardBalance.ts` |
+| `getGiftCardInfoFromMD` | ALL | pública | `/middleware/checkout/getGiftCardInfoFromMD/` | `getGiftInfoFromMD.ts` |
+| `getDataInMasterData` | POST | pública | `/middleware/checkout/getDataInMasterData` | `getDataInMasterData.ts` |
+| `sitemap` | GET | pública | `/middleware/checkout/sitemap/:type?` | `sitemap.ts` |
 
 A visibilidade é a mesma do `service.json`: todas `public: true`, exceto
 `createGiftCard`, a única que tinha `policies`. **A exposição não mudou** — no

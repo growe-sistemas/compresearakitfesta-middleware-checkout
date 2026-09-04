@@ -1,11 +1,16 @@
 /**
- * Inventario das rotas declaradas no app VTEX IO
+ * Inventario das rotas portadas do app VTEX IO
  * `C:\Growe\stores\kitfesta-seara\node\service.json`.
  *
- * Copia fiel: path exatamente como esta no service.json, metodo conforme o
- * `index.ts` do app. Onde o app NAO envolveu o handler em `method({...})`,
- * a rota aceita qualquer verbo no VTEX IO — aqui isso vira `ALL` em vez de
- * chutar GET.
+ * PATHS RENOMEADOS: o prefixo `/_v1/private/middleware/` do VTEX IO virou
+ * `/middleware/checkout/`. O nome de cada rota e o resto do path seguem
+ * identicos, entao migrar o front e um find-and-replace do prefixo.
+ * `/_v1/make-cluster-alive` e `/_v/sitemap` tambem foram para baixo do mesmo
+ * prefixo.
+ *
+ * O metodo segue o `index.ts` do app: onde ele NAO envolveu o handler em
+ * `method({...})`, a rota aceita qualquer verbo no VTEX IO — aqui isso vira
+ * `ALL` em vez de chutar GET.
  *
  * A logica de cada rota foi portada dos handlers originais em
  * `node/middlewares/*.ts`. O campo `handlers` guarda a origem de cada uma.
@@ -38,7 +43,7 @@ export interface LegacyRoute {
 export const LEGACY_ROUTES = [
   {
     name: 'makeClusterAlive',
-    path: '/_v1/make-cluster-alive',
+    path: '/middleware/checkout/make-cluster-alive',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/makeClusterAlive.ts'],
@@ -46,7 +51,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getAddressPosition',
-    path: '/_v1/private/middleware/getAddressPosition/',
+    path: '/middleware/checkout/getAddressPosition/',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getAddressPosition.ts'],
@@ -54,7 +59,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getAddresState',
-    path: '/_v1/private/middleware/getAddresState/',
+    path: '/middleware/checkout/getAddresState/',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getAddresState.ts'],
@@ -62,7 +67,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getDataSintegraRF',
-    path: '/_v1/private/middleware/getDataSintegraRF/:cnpj',
+    path: '/middleware/checkout/getDataSintegraRF/:cnpj',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getDataSintegraRF.ts'],
@@ -70,7 +75,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getDataSintegraSN',
-    path: '/_v1/private/middleware/getDataSintegraSN/:cnpj',
+    path: '/middleware/checkout/getDataSintegraSN/:cnpj',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getDataSintegraSN.ts'],
@@ -78,7 +83,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getDataSintegraST',
-    path: '/_v1/private/middleware/getDataSintegraST/:cnpj',
+    path: '/middleware/checkout/getDataSintegraST/:cnpj',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getDataSintegraST.ts'],
@@ -86,7 +91,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getDataSintegraCPF',
-    path: '/_v1/private/middleware/getDataSintegraCPF/:cpf/:date',
+    path: '/middleware/checkout/getDataSintegraCPF/:cpf/:date',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getDataSintegraCPF.ts'],
@@ -94,7 +99,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getEmployee',
-    path: '/_v1/private/middleware/getEmployee/:cpf',
+    path: '/middleware/checkout/getEmployee/:cpf',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getEmployee.ts'],
@@ -102,7 +107,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getDataRamdom',
-    path: '/_v1/private/middleware/getDataRamdom/',
+    path: '/middleware/checkout/getDataRamdom/',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getDataRamdom.ts'],
@@ -110,7 +115,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getBirthDateCL',
-    path: '/_v1/private/middleware/getInfo/:email',
+    path: '/middleware/checkout/getInfo/:email',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getBirthDateCL.ts'],
@@ -118,7 +123,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'setBirthDateCL',
-    path: '/_v1/private/middleware/setInfo/:email/:birthDate',
+    path: '/middleware/checkout/setInfo/:email/:birthDate',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/setBirthDateCL.ts'],
@@ -126,14 +131,14 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'updateDataMD',
-    path: '/_v1/private/middleware/md/update',
+    path: '/middleware/checkout/md/update',
     isPublic: true,
     methods: ['POST'],
     handlers: ['middlewares/updateDataMD.ts'],
   },
   {
     name: 'createGiftCard',
-    path: '/_v1/private/middleware/createGiftCard/',
+    path: '/middleware/checkout/createGiftCard/',
     isPublic: false,
     methods: ['POST'],
     handlers: [
@@ -145,7 +150,7 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getGiftCardInfoFromMD',
-    path: '/_v1/private/middleware/getGiftCardInfoFromMD/',
+    path: '/middleware/checkout/getGiftCardInfoFromMD/',
     isPublic: true,
     methods: ['ALL'],
     handlers: ['middlewares/getGiftInfoFromMD.ts'],
@@ -153,14 +158,14 @@ export const LEGACY_ROUTES = [
   },
   {
     name: 'getDataInMasterData',
-    path: '/_v1/private/middleware/getDataInMasterData',
+    path: '/middleware/checkout/getDataInMasterData',
     isPublic: true,
     methods: ['POST'],
     handlers: ['middlewares/getDataInMasterData.ts'],
   },
   {
     name: 'sitemap',
-    path: '/_v/sitemap/:type?',
+    path: '/middleware/checkout/sitemap/:type?',
     isPublic: true,
     methods: ['GET'],
     handlers: ['middlewares/sitemap.ts'],

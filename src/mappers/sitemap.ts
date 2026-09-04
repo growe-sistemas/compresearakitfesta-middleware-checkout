@@ -93,7 +93,7 @@ export function buildIndexSitemap(baseUrl: string): string {
 
   for (const type of ['products', 'posts']) {
     xml += '  <sitemap>\n';
-    xml += `    <loc>${baseUrl}/_v/sitemap/${type}</loc>\n`;
+    xml += `    <loc>${baseUrl}/middleware/checkout/sitemap/${type}</loc>\n`;
     xml += `    <lastmod>${now}</lastmod>\n`;
     xml += '  </sitemap>\n';
   }
