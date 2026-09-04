@@ -64,7 +64,6 @@ de abrir a porta, com a lista do que está errado no stderr.
 | `VTEX_APPTOKEN` | AppToken da VTEX (header `X-VTEX-API-AppToken`) |
 | `VTEX_ACCOUNT` | Nome da conta VTEX |
 | `VTEX_BASE_URL` | URL base, ex.: `https://acmestore.vtexcommercestable.com.br` (barra final é normalizada) |
-| `API_KEY` | Chave que protege **este** middleware. Mínimo **16 caracteres** |
 | `PORT` | Porta HTTP (default `3000`; no Render vem injetada) |
 
 ### Opcionais
@@ -76,6 +75,7 @@ de abrir a porta, com a lista do que está errado no stderr.
 | `CORS_ORIGINS` | `*` | Lista separada por vírgula; `*` libera geral |
 | `VTEX_TIMEOUT_MS` | `10000` | Timeout **por tentativa** na VTEX |
 | `VTEX_MAX_RETRIES` | `3` | Retentativas em 408/429/5xx e falha de rede |
+| `API_KEY` | — | Protege `createGiftCard` (mínimo 16 caracteres). Sem ela, essa rota responde 503 |
 
 ### Integrações externas herdadas
 
@@ -105,18 +105,32 @@ O `.env` está no `.gitignore`. **Nunca commite credenciais reais** — o
 
 ## Autenticação
 
-Todas as rotas de negócio exigem o header:
+**Quase todas as rotas são públicas**, replicando o `public: true` do
+`service.json` do app VTEX IO. Isso não é uma flexibilização: elas são chamadas
+pelo **navegador** (checkout e componentes React da loja) com `fetch` sem
+header nenhum. Uma chave dentro de bundle de front não é segredo — apareceria
+no DevTools de qualquer visitante.
+
+A visibilidade de cada rota fica no campo `isPublic` de
+[`src/routes/legacy/manifest.ts`](src/routes/legacy/manifest.ts).
+
+Uma única rota exige autenticação:
+
+| Rota | Por quê |
+| --- | --- |
+| `createGiftCard` | Era a **única com `policies`** no `service.json` (restrita ao app `b2csearakitfesta.store-theme`), é chamada de uma tela de admin (`react/GiftCardAdmin.tsx`) e não do checkout, e emite gift card com valor arbitrário. |
+
+Para chamá-la:
 
 ```
 x-api-key: <valor de API_KEY>
 ```
 
 A comparação é feita em tempo constante (`timingSafeEqual`), e o valor recebido
-nunca é logado. Sem header válido a resposta é `401` — inclusive para caminhos
-inexistentes, de propósito: quem não se autentica não descobre quais rotas
-existem. Com a chave correta, caminho desconhecido devolve `404 ROUTE_NOT_FOUND`.
+nunca é logado. Sem `API_KEY` definida no ambiente, essa rota responde
+`503 SERVICE_NOT_CONFIGURED` — o serviço sobe normalmente.
 
-`GET /health` fica **fora** da autenticação (é o health check do Render).
+`GET /health` também é público (é o health check do Render).
 
 ---
 
@@ -152,28 +166,42 @@ A **lógica de cada uma foi portada** dos handlers originais em
 `ALL` = o app original não envolveu o handler em `method({...})`, então a rota
 aceita qualquer verbo no VTEX IO. Foi copiado assim em vez de assumir `GET`.
 
-| Rota | Método | Path | Handler original |
-| --- | --- | --- | --- |
-| `makeClusterAlive` | ALL | `/_v1/make-cluster-alive` | `makeClusterAlive.ts` |
-| `getAddressPosition` | ALL | `/_v1/private/middleware/getAddressPosition/` | `getAddressPosition.ts` |
-| `getAddresState` | ALL | `/_v1/private/middleware/getAddresState/` | `getAddresState.ts` |
-| `getDataSintegraRF` | ALL | `/_v1/private/middleware/getDataSintegraRF/:cnpj` | `getDataSintegraRF.ts` |
-| `getDataSintegraSN` | ALL | `/_v1/private/middleware/getDataSintegraSN/:cnpj` | `getDataSintegraSN.ts` |
-| `getDataSintegraST` | ALL | `/_v1/private/middleware/getDataSintegraST/:cnpj` | `getDataSintegraST.ts` |
-| `getDataSintegraCPF` | ALL | `/_v1/private/middleware/getDataSintegraCPF/:cpf/:date` | `getDataSintegraCPF.ts` |
-| `getEmployee` | ALL | `/_v1/private/middleware/getEmployee/:cpf` | `getEmployee.ts` |
-| `getDataRamdom` | ALL | `/_v1/private/middleware/getDataRamdom/` | `getDataRamdom.ts` |
-| `getBirthDateCL` | ALL | `/_v1/private/middleware/getInfo/:email` | `getBirthDateCL.ts` |
-| `setBirthDateCL` | ALL | `/_v1/private/middleware/setInfo/:email/:birthDate` | `setBirthDateCL.ts` |
-| `updateDataMD` | POST | `/_v1/private/middleware/md/update` | `updateDataMD.ts` |
-| `createGiftCard` | POST | `/_v1/private/middleware/createGiftCard/` | `generateUniqueGiftCardInfos.ts` → `createGiftCard.ts` → `addGiftCardBalance.ts` |
-| `getGiftCardInfoFromMD` | ALL | `/_v1/private/middleware/getGiftCardInfoFromMD/` | `getGiftInfoFromMD.ts` |
-| `getDataInMasterData` | POST | `/_v1/private/middleware/getDataInMasterData` | `getDataInMasterData.ts` |
-| `sitemap` | GET | `/_v/sitemap/:type?` | `sitemap.ts` |
+| Rota | Método | Auth | Path | Handler original |
+| --- | --- | --- | --- | --- |
+| `makeClusterAlive` | ALL | pública | `/_v1/make-cluster-alive` | `makeClusterAlive.ts` |
+| `getAddressPosition` | ALL | pública | `/_v1/private/middleware/getAddressPosition/` | `getAddressPosition.ts` |
+| `getAddresState` | ALL | pública | `/_v1/private/middleware/getAddresState/` | `getAddresState.ts` |
+| `getDataSintegraRF` | ALL | pública | `/_v1/private/middleware/getDataSintegraRF/:cnpj` | `getDataSintegraRF.ts` |
+| `getDataSintegraSN` | ALL | pública | `/_v1/private/middleware/getDataSintegraSN/:cnpj` | `getDataSintegraSN.ts` |
+| `getDataSintegraST` | ALL | pública | `/_v1/private/middleware/getDataSintegraST/:cnpj` | `getDataSintegraST.ts` |
+| `getDataSintegraCPF` | ALL | pública | `/_v1/private/middleware/getDataSintegraCPF/:cpf/:date` | `getDataSintegraCPF.ts` |
+| `getEmployee` | ALL | pública | `/_v1/private/middleware/getEmployee/:cpf` | `getEmployee.ts` |
+| `getDataRamdom` | ALL | pública | `/_v1/private/middleware/getDataRamdom/` | `getDataRamdom.ts` |
+| `getBirthDateCL` | ALL | pública | `/_v1/private/middleware/getInfo/:email` | `getBirthDateCL.ts` |
+| `setBirthDateCL` | ALL | pública | `/_v1/private/middleware/setInfo/:email/:birthDate` | `setBirthDateCL.ts` |
+| `updateDataMD` | POST | pública | `/_v1/private/middleware/md/update` | `updateDataMD.ts` |
+| `createGiftCard` | POST | 🔑 `x-api-key` | `/_v1/private/middleware/createGiftCard/` | `generateUniqueGiftCardInfos.ts` → `createGiftCard.ts` → `addGiftCardBalance.ts` |
+| `getGiftCardInfoFromMD` | ALL | pública | `/_v1/private/middleware/getGiftCardInfoFromMD/` | `getGiftInfoFromMD.ts` |
+| `getDataInMasterData` | POST | pública | `/_v1/private/middleware/getDataInMasterData` | `getDataInMasterData.ts` |
+| `sitemap` | GET | pública | `/_v/sitemap/:type?` | `sitemap.ts` |
 
-No VTEX IO todas eram `public: true` — a única com `policies` era
-`createGiftCard` (restrita ao app `b2csearakitfesta.store-theme`). Fora do
-VTEX IO essa camada não existe, então **aqui todas exigem `x-api-key`**.
+A visibilidade é a mesma do `service.json`: todas `public: true`, exceto
+`createGiftCard`, a única que tinha `policies`. **A exposição não mudou** — no
+VTEX IO essas rotas também respondiam a qualquer requisição, só que no domínio
+da loja.
+
+O que isso implica, e vale ter em mente:
+
+- `getDataInMasterData` e `updateDataMD` são **proxy genérico** do Master Data:
+  qualquer um lê e escreve qualquer entidade da conta. Era assim no VTEX IO
+  também. Uma allowlist de entidades resolveria.
+- As rotas Sintegra consomem **cota paga por consulta**. Público significa que
+  um terceiro pode queimar a cota. Rate limit por IP resolveria.
+- `getDataSintegraCPF` e `getEmployee` devolvem **dado pessoal** (CPF, nome,
+  e-mail) sem autenticação.
+
+Mitigação disponível hoje sem mudar contrato: apontar `CORS_ORIGINS` para o
+domínio da loja. Isso só barra navegador — `curl` continua passando.
 
 #### O que foi corrigido no porte
 

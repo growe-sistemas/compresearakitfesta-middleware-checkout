@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { env } from '../config/env.js';
-import { AppError } from '../services/vtex/errors.js';
+import { AppError, notConfigured } from '../services/vtex/errors.js';
 
 /** Comparacao em tempo constante, imune a diferenca de tamanho. */
 function safeCompare(a: string, b: string): boolean {
@@ -12,10 +12,18 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 /**
- * Protege as rotas de negocio: exige `x-api-key` igual a API_KEY.
- * O valor recebido nunca e logado nem devolvido no erro.
+ * Protege as rotas marcadas como nao publicas no manifesto: exige `x-api-key`
+ * igual a API_KEY. O valor recebido nunca e logado nem devolvido no erro.
+ *
+ * A maioria das rotas NAO passa por aqui — elas eram `public: true` no VTEX IO
+ * e sao chamadas pelo navegador, onde uma chave no bundle nao seria segredo.
  */
 export function requireApiKey(req: Request, _res: Response, next: NextFunction): void {
+  if (env.API_KEY === undefined) {
+    next(notConfigured('rota protegida', ['API_KEY']));
+    return;
+  }
+
   const header = req.header('x-api-key');
 
   if (header === undefined || header === '') {

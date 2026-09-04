@@ -22,8 +22,18 @@ const envSchema = z.object({
     // normaliza: sem barra no final, para concatenar paths sem surpresa
     .transform((url) => url.replace(/\/+$/, '')),
 
-  // Chave que protege este middleware
-  API_KEY: z.string().min(16, 'API_KEY precisa ter ao menos 16 caracteres'),
+  /**
+   * Chave que protege as rotas NAO publicas.
+   *
+   * Opcional: quase todas as rotas sao publicas (o checkout e os componentes
+   * React da loja chamam direto do navegador, onde uma chave nao seria
+   * segredo). Sem API_KEY definida, as poucas rotas protegidas respondem
+   * 503 SERVICE_NOT_CONFIGURED em vez de derrubar o boot.
+   */
+  API_KEY: z
+    .string()
+    .min(16, 'API_KEY precisa ter ao menos 16 caracteres')
+    .optional(),
 
   /**
    * Integracoes externas herdadas do app VTEX IO. Opcionais: sem elas o
