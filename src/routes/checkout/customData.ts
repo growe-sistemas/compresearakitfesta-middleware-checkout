@@ -7,7 +7,7 @@ import {
   orderFormIdSchema,
   putCustomData,
 } from '../../services/vtex/checkout.js';
-import { normalizeBirthDate } from './masterdata.js';
+import { parseFlexibleDate, toBrazilianDate } from '../../mappers/date.js';
 
 /**
  * Escrita de `customData` do orderForm pelo middleware.
@@ -18,25 +18,27 @@ import { normalizeBirthDate } from './masterdata.js';
  * essa responsabilidade para o servidor.
  */
 
-/** `yyyy-MM-dd` -> `dd/mm/yyyy`, o formato que o campo guarda hoje. */
-function toStoredFormat(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-') as [string, string, string];
-  return `${day}/${month}/${year}`;
+/**
+ * Campo de data do corpo: aceita `dd-MM-yyyy`, `dd/MM/yyyy`, ISO `YYYY-MM-DD`
+ * e data-e-hora ISO; entrega sempre `YYYY-MM-DD`.
+ *
+ * O `refine` antes do `transform` e so para a mensagem sair legivel: `pipe`
+ * devolveria "expected string, received null".
+ */
+function dateField(nome: string) {
+  return z
+    .string()
+    .min(1)
+    .refine((value) => parseFlexibleDate(value) !== null, {
+      message: `${nome} invalida: use dd-MM-yyyy, dd/MM/yyyy ou YYYY-MM-DD, com data existente`,
+    })
+    .transform((value) => parseFlexibleDate(value) as string);
 }
 
 const birthDateBody = z.object({
   orderFormId: orderFormIdSchema,
-  /**
-   * Aceita `dd-MM-yyyy` (o que o `checkout-ui` ja monta) ou ISO `yyyy-MM-dd`.
-   * Data que nao existe no calendario e barrada aqui, antes da VTEX.
-   */
-  birthDate: z
-    .string()
-    .min(1)
-    .refine((value) => normalizeBirthDate(value) !== null, {
-      message: 'birthDate invalida: use dd-MM-yyyy ou yyyy-MM-dd, com data existente',
-    })
-    .transform((value) => normalizeBirthDate(value) as string),
+  /** Data que nao existe no calendario e barrada aqui, antes da VTEX. */
+  birthDate: dateField('birthDate'),
 });
 
 /**
@@ -60,7 +62,7 @@ export const setBirthDateCustomData = asyncHandler(async (req, res) => {
   const { orderFormId, birthDate } = birthDateBody.parse(req.body);
 
   const { app, field } = CUSTOM_DATA_FIELDS.birthDate;
-  const value = toStoredFormat(birthDate);
+  const value = toBrazilianDate(birthDate) as string;
 
   const result = await putCustomData({ orderFormId, app, field, value });
 
@@ -90,6 +92,92 @@ export const setBirthDateCustomData = asyncHandler(async (req, res) => {
     /** ISO, para quem preferir trabalhar com data normalizada. */
     birthDate,
     /** `true` = a resposta da VTEX ja trouxe o valor gravado e ele confere. */
+    confirmed: result.confirmed,
+    storedValue: result.storedValue,
+  });
+});
+
+const deliveryDateBody = z.object({
+  orderFormId: orderFormIdSchema,
+  /**
+   * Data da entrega escolhida. Alem dos formatos de data, aceita data-e-hora
+   * ISO — para o front poder mandar direto o
+   * `shippingData.logisticsInfo[0].slas[0].deliveryWindow.endDateUtc`, sem
+   * converter nada antes.
+   */
+  deliveryDate: dateField('deliveryDate'),
+});
+
+/**
+ * `POST /middleware/checkout/custom-data/delivery-date`
+ *
+ * Grava a data de entrega escolhida em `customData.custom_delivery_date`.
+ *
+ * Substitui o `setScheduleDateCheckout` do `checkout-ui`
+ * (`components/Schedule/index.js:73`), que montava o corpo, convertia a data
+ * no fuso do NAVEGADOR e nao conferia a gravacao.
+ *
+ * ---------------------------------------------------------------------------
+ * REQUEST
+ * ---------------------------------------------------------------------------
+ * ```json
+ * { "orderFormId": "cc551425e8a445878344b79b79c48f6d", "deliveryDate": "27-11-2026" }
+ * ```
+ * `deliveryDate` aceita `dd-MM-yyyy`, `dd/MM/yyyy`, `YYYY-MM-DD` ou data-e-hora
+ * ISO (`2026-11-27T12:00:00Z`).
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "updated": true,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "field": "custom_delivery_date",
+ *   "value": "27/11/2026",
+ *   "deliveryDate": "2026-11-27",
+ *   "confirmed": true,
+ *   "storedValue": "27/11/2026"
+ * }
+ * ```
+ *
+ * ERROS
+ * - `400 VALIDATION_ERROR`          data inexistente, formato desconhecido ou
+ *                                   `orderFormId` fora do padrao
+ * - `502 CUSTOM_DATA_NOT_PERSISTED` a VTEX aceitou mas gravou outro valor
+ *
+ * ATENCAO AO FUSO: data-e-hora e convertida no calendario de **Sao Paulo**,
+ * nao em UTC. Uma janela de entrega em `2026-11-27T00:00:00Z` vira
+ * `26/11/2026` — que e o dia que o cliente brasileiro ve. O front fazia o
+ * mesmo por acidente (usava o fuso do navegador); aqui a regra e explicita.
+ */
+export const setDeliveryDateCustomData = asyncHandler(async (req, res) => {
+  const { orderFormId, deliveryDate } = deliveryDateBody.parse(req.body);
+
+  const { app, field } = CUSTOM_DATA_FIELDS.deliveryDate;
+  const value = toBrazilianDate(deliveryDate) as string;
+
+  const result = await putCustomData({ orderFormId, app, field, value });
+
+  if (result.storedValue !== null && !result.confirmed) {
+    throw new AppError(
+      502,
+      'CUSTOM_DATA_NOT_PERSISTED',
+      `A VTEX aceitou a gravacao de ${field} mas devolveu "${result.storedValue}" em vez de "${value}"`,
+    );
+  }
+
+  logger.info(
+    { orderFormId, field, value, confirmed: result.confirmed },
+    'customData gravado no orderForm',
+  );
+
+  res.status(200).json({
+    updated: true,
+    orderFormId: result.orderFormId ?? orderFormId,
+    field,
+    value,
+    deliveryDate,
     confirmed: result.confirmed,
     storedValue: result.storedValue,
   });

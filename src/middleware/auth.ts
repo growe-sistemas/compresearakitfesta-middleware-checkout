@@ -12,7 +12,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 /**
- * Protege as rotas marcadas como nao publicas no manifesto: exige `x-api-key`
+ * Protege as rotas com `auth: 'apiKey'` em `routes.ts`: exige `x-api-key`
  * igual a API_KEY. O valor recebido nunca e logado nem devolvido no erro.
  *
  * A maioria das rotas NAO passa por aqui — elas eram `public: true` no VTEX IO

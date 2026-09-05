@@ -84,7 +84,7 @@ Render — onde não existe `.env` — quem manda são as variáveis do dashboar
 | `CORS_ORIGINS` | `*` | Lista separada por vírgula; `*` libera geral |
 | `VTEX_TIMEOUT_MS` | `10000` | Timeout **por tentativa** na VTEX |
 | `VTEX_MAX_RETRIES` | `3` | Retentativas em 408/429/5xx e falha de rede |
-| `API_KEY` | — | Protege `createGiftCard` (mínimo 16 caracteres). Sem ela, essa rota responde 503 |
+| `API_KEY` | — | Protege rotas com `auth: 'apiKey'` (mínimo 16 caracteres). Hoje nenhuma rota exige — ver `routes.ts` |
 | `SINTEGRA_TIMEOUT_MS` | `30000` | Timeout por consulta na SintegraWS. Folgado de propósito: o plugin `SN` já foi medido em **21 s** |
 | `PUBLICA_CNPJ_BASE_URL` | `https://publica.cnpj.ws/cnpj` | Base pública da Receita, usada como fonte complementar de CNPJ |
 | `PUBLICA_TIMEOUT_MS` | `8000` | Timeout da `publica.cnpj.ws` |
@@ -127,22 +127,18 @@ header nenhum. Uma chave dentro de bundle de front não é segredo — apareceri
 no DevTools de qualquer visitante.
 
 A visibilidade de cada rota fica no campo `isPublic` de
-[`src/routes/checkout/manifest.ts`](src/routes/checkout/manifest.ts).
+[`src/routes/checkout/routes.ts`](src/routes/checkout/routes.ts).
 
-Uma única rota exige autenticação:
-
-| Rota | Por quê |
-| --- | --- |
-| `createGiftCard` | Era a **única com `policies`** no `service.json` (restrita ao app `b2csearakitfesta.store-theme`), é chamada de uma tela de admin (`react/GiftCardAdmin.tsx`) e não do checkout, e emite gift card com valor arbitrário. |
-
-Para chamá-la:
+**Hoje nenhuma rota exige autenticação** — a única que exigia era
+`createGiftCard`, removida junto com o fluxo de gift card. O mecanismo continua
+montado: basta marcar `isPublic: false` numa rota para que ela passe a exigir
 
 ```
 x-api-key: <valor de API_KEY>
 ```
 
 A comparação é feita em tempo constante (`timingSafeEqual`), e o valor recebido
-nunca é logado. Sem `API_KEY` definida no ambiente, essa rota responde
+nunca é logado. Sem `API_KEY` definida no ambiente, uma rota protegida responde
 `503 SERVICE_NOT_CONFIGURED` — o serviço sobe normalmente.
 
 `GET /health` também é público (é o health check do Render).
@@ -188,6 +184,7 @@ de parâmetros de URL:
 | `/middleware/checkout/setInfo` | POST, PUT | pública | `/middleware/checkout/setInfo/:email/:birthDate` |
 | `/middleware/checkout/custom-data/birth-date` | POST | pública | o `PUT` de `customData` que o `checkout-ui` fazia direto na VTEX |
 | `/middleware/checkout/corporate-data` | POST, DELETE | pública | o `_handleCNPJSearchBtnClickEv` e o `_handleDiscardCNPJ` inteiros |
+| `/middleware/checkout/custom-data/delivery-date` | POST | pública | o `setScheduleDateCheckout` do `checkout-ui` |
 
 ```bash
 curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type: application/json' -d '{"email":"cliente@dominio.com","birthDate":"24-11-1995"}'
@@ -229,15 +226,14 @@ saiu; `missingFiscalFields` diz exatamente o que faltou quando reprova.
 ### Rotas sob `/middleware/checkout/*`
 
 As 16 rotas declaradas em `kitfesta-seara/node/service.json` foram copiadas
-para [`src/routes/checkout/manifest.ts`](src/routes/checkout/manifest.ts) — path e
+para [`src/routes/checkout/routes.ts`](src/routes/checkout/routes.ts) — path e
 verbo **exatamente** como no original — e registradas em
 [`src/routes/checkout/index.ts`](src/routes/checkout/index.ts).
 
 **Os paths foram renomeados**: o prefixo `/_v1/private/middleware/` do VTEX IO
 virou `/middleware/checkout/`. O nome de cada rota e o resto do path seguem
 idênticos, então migrar o front é um find-and-replace do prefixo.
-`/_v1/make-cluster-alive` e `/_v/sitemap` também foram para baixo do mesmo
-prefixo.
+`/_v1/make-cluster-alive` também foi para baixo do mesmo prefixo.
 
 A **lógica de cada uma veio** dos handlers em
 `kitfesta-seara/node/middlewares/`. O que mudou de infraestrutura:
@@ -263,19 +259,14 @@ aceita qualquer verbo no VTEX IO. Foi copiado assim em vez de assumir `GET`.
 | `getDataSintegraST` | ALL | pública | `/middleware/checkout/getDataSintegraST/:cnpj` | `getDataSintegraST.ts` |
 | `getDataSintegraCPF` | ALL | pública | `/middleware/checkout/getDataSintegraCPF/:cpf/:date` | `getDataSintegraCPF.ts` |
 | `getEmployee` | ALL | pública | `/middleware/checkout/getEmployee/:cpf` | `getEmployee.ts` |
-| `getDataRamdom` | ALL | pública | `/middleware/checkout/getDataRamdom/` | `getDataRamdom.ts` |
 | `getBirthDateCL` | ALL | pública | `/middleware/checkout/getInfo/:email` | `getBirthDateCL.ts` |
 | `setBirthDateCL` | ALL | pública | `/middleware/checkout/setInfo/:email/:birthDate` | `setBirthDateCL.ts` |
 | `updateDataMD` | POST | pública | `/middleware/checkout/md/update` | `updateDataMD.ts` |
-| `createGiftCard` | POST | 🔑 `x-api-key` | `/middleware/checkout/createGiftCard/` | `generateUniqueGiftCardInfos.ts` → `createGiftCard.ts` → `addGiftCardBalance.ts` |
-| `getGiftCardInfoFromMD` | ALL | pública | `/middleware/checkout/getGiftCardInfoFromMD/` | `getGiftInfoFromMD.ts` |
 | `getDataInMasterData` | POST | pública | `/middleware/checkout/getDataInMasterData` | `getDataInMasterData.ts` |
-| `sitemap` | GET | pública | `/middleware/checkout/sitemap/:type?` | `sitemap.ts` |
 
-A visibilidade é a mesma do `service.json`: todas `public: true`, exceto
-`createGiftCard`, a única que tinha `policies`. **A exposição não mudou** — no
-VTEX IO essas rotas também respondiam a qualquer requisição, só que no domínio
-da loja.
+A visibilidade é a mesma do `service.json`: todas `public: true`. **A exposição
+não mudou** — no VTEX IO essas rotas também respondiam a qualquer requisição, só
+que no domínio da loja.
 
 O que isso implica, e vale ter em mente:
 
@@ -292,18 +283,9 @@ domínio da loja. Isso só barra navegador — `curl` continua passando.
 
 #### O que foi corrigido em relação ao app VTEX IO
 
-- **Loop infinito** em `createGiftCard`: o original fazia
-  `while (mdResult.length > 0)` regenerando os códigos **sem reconsultar** o
-  Master Data — a condição nunca mudava, então qualquer colisão pendurava o
-  worker. Agora a busca é refeita a cada tentativa, com limite de 10.
-- **Erros engolidos**: `createGiftCard` e `addGiftCardBalance` faziam
-  `catch (e) { console.log(e) }` e seguiam como se tivesse dado certo. Agora o
-  erro sobe e vira resposta de erro.
 - **Injeção de XML** em `getEmployee`: o CPF era concatenado cru no payload.
   Agora é escapado.
 - **Credenciais hardcoded** movidas para env (ver abaixo).
-- Valores do sitemap passaram a ser escapados, e produto sem seller não
-  derruba mais a geração inteira.
 
 #### Divergências preservadas de propósito
 
@@ -311,12 +293,6 @@ domínio da loja. Isso só barra navegador — `curl` continua passando.
   copiar-e-colar do original (`getDataFromST` existia no client e nunca era
   usado). Mantido para não mudar a resposta de quem já consome; para corrigir,
   troque por `getCnpjFromST` em [`src/routes/checkout/sintegra.ts`](src/routes/checkout/sintegra.ts).
-- `getDataRamdom` só devolve `{"ok":"ok"}` — no original ele carregava as
-  settings do app e descartava. Sem VTEX IO não há settings; virou um segundo
-  health check.
-- `createGiftCard` não preenche mais `profileId`. No VTEX IO ele vinha de um
-  `GET /api/vtexid/pub/authenticated/user` com o `adminUserAuthToken`, que não
-  existe fora do VTEX IO (AppKey/AppToken não tem usuário associado).
 
 #### Pontos a rever quando formos melhorar
 
@@ -327,7 +303,7 @@ domínio da loja. Isso só barra navegador — `curl` continua passando.
 - `getDataInMasterData` e `updateDataMD` são **proxy genérico** do Master Data:
   quem tem a `x-api-key` lê e escreve qualquer entidade da conta. Vale uma
   allowlist de entidades.
-- Typos herdados nos nomes: `getAddresState`, `getDataRamdom`.
+- Typo herdado no nome: `getAddresState`.
 - Nome × path divergentes: `getBirthDateCL` → `/getInfo`,
   `setBirthDateCL` → `/setInfo`.
 - `makeClusterAlive` é keep-alive de worker do VTEX IO; provavelmente não faz
@@ -474,10 +450,10 @@ src/
 ├─ routes/        health e checkout/ — tudo sob /middleware/checkout/*
 ├─ services/
 │  ├─ http/       núcleo HTTP: timeout, retry com backoff, parse por schema
-│  ├─ vtex/       cliente VTEX + masterdata, catalog, giftcard
+│  ├─ vtex/       cliente VTEX + masterdata e checkout
 │  ├─ sintegra/   SintegraWS (CPF/CNPJ)
 │  └─ seara/      integração "controle" B2E, protocolo XML
-├─ mappers/       funções puras (employee, sitemap, endereço, códigos)
+├─ mappers/       funções puras (employee, endereço, CNPJ, perfil corporativo)
 ├─ types/         schemas/tipos VTEX e contrato de saída    (orderForm a definir)
 ├─ app.ts         montagem do Express
 └─ index.ts       listen em 0.0.0.0 + graceful shutdown (SIGTERM/SIGINT)

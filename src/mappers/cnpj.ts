@@ -1,3 +1,4 @@
+import { toBrazilianDate } from './date.js';
 import type { PublicaCnpjResponse } from '../services/publicacnpj/client.js';
 import type {
   CnpjAddress,
@@ -126,14 +127,6 @@ export function toIsoDate(value: string | null): string | null {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
   if (match === null) return null;
   return `${match[3]}-${match[2]}-${match[1]}`;
-}
-
-/** `yyyy-mm-dd` -> `dd/mm/yyyy` (formato que o ERP recebe hoje). */
-export function toBrazilianDate(isoDate: string | null): string | null {
-  if (isoDate === null) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
-  if (match === null) return null;
-  return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
 /**

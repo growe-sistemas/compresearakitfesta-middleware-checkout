@@ -29,7 +29,7 @@ Regras que valem para **todas** as rotas. É o que faltava nas rotas herdadas.
 ```
 
 Recurso no plural, em inglês, sem sigla de fonte de dado no nome
-(`getGiftCardInfoFromMD` → `/middleware/checkout/gift-cards/lookup`). Verbo só quando a operação
+(`getEmployee` → `/middleware/checkout/employees/lookup`). Verbo só quando a operação
 não é CRUD (`/lookup`, `/verify`).
 
 ### 1.2 Verbos
@@ -568,58 +568,7 @@ dois nomes diferem. Decisão do time do ERP.
 
 ---
 
-### 2.7 `POST /middleware/checkout/gift-cards/lookup`
-
-Substitui `getGiftCardInfoFromMD`.
-
-```jsonc
-// request
-{ "code": "GIFTCARD-AB12CD" }
-
-// response 200
-{ "data": {
-    "found": true,
-    "giftCard": { "customCode": "GIFTCARD-AB12CD", "redemptionCode": "XYZ123", "prefix": "GIFTCARD" }
-} }
-
-{ "data": { "found": false, "giftCard": null } }
-```
-
-O `prefix` (hoje calculado no front com `split('-',1)[0].toUpperCase`, e com bug)
-passa a vir pronto — é ele que vai para `custom_giftcard_prefix` e para o
-`openTextField`.
-
----
-
-### 2.8 `POST /middleware/checkout/gift-cards/redemptions`
-
-Substitui a escrita direta do navegador na entidade `GF`.
-
-```jsonc
-// request
-{ "code": "GIFTCARD-AB12CD", "orderFormId": "ab12..." }
-// response 200
-{ "data": { "registered": true, "alreadyUsed": false } }
-```
-
----
-
-### 2.9 `POST /middleware/checkout/gift-cards` — 🔑 `x-api-key`
-
-Emissão em lote (hoje `createGiftCard`, consumida pela tela de admin).
-Contrato mantido, envelope novo:
-
-```jsonc
-// request
-{ "prefix": "SEARA", "value": 10000, "quantity": 5, "expiringDate": "2026-12-31" }
-
-// response 200
-{ "data": { "created": [ { "id": "...", "customCode": "SEARA-AB12CD", "redemptionCode": "...", "relationName": "...", "value": 10000 } ] } }
-```
-
----
-
-### 2.10 `POST /middleware/checkout/employees/lookup`
+### 2.7 `POST /middleware/checkout/employees/lookup`
 
 Substitui `getEmployee/:cpf` — tira o CPF da URL e o `error: true` com HTTP 200.
 
@@ -641,12 +590,6 @@ Falha de autenticação na Seara deixa de ser `200 { error: true }` e vira
 
 ---
 
-### 2.11 `GET /middleware/checkout/sitemap/:type?`
-
-Mantida como está (não tem dado pessoal, é cacheável, é XML).
-
----
-
 ## 3. De/para: rota herdada → rota nova
 
 | Rota herdada | Rota nova | Mudança principal |
@@ -659,12 +602,8 @@ Mantida como está (não tem dado pessoal, é cacheável, é XML).
 | `md/update` | *(sem equivalente genérico)* | cada escrita vira rota própria |
 | `getDataSintegraCPF/:cpf/:date` | `POST /middleware/checkout/documents/cpf/verify` | PII fora da URL, cache no servidor, decisão pronta |
 | `getDataSintegraRF/SN/ST/:cnpj` | `POST /middleware/checkout/cnpj/verify` | 4 requisições → 1; consolidação no servidor |
-| `getGiftCardInfoFromMD/` | `POST /middleware/checkout/gift-cards/lookup` | envelope + `prefix` pronto |
-| *(escrita direta na GF)* | `POST /middleware/checkout/gift-cards/redemptions` | sai do navegador |
-| `createGiftCard/` | `POST /middleware/checkout/gift-cards` | envelope |
 | `getEmployee/:cpf` | `POST /middleware/checkout/employees/lookup` | CPF fora da URL; erro com status real |
-| `sitemap/:type?` | `GET /middleware/checkout/sitemap/:type?` | — |
-| `make-cluster-alive`, `getDataRamdom/` | `GET /health` | keep-alive de worker VTEX IO não existe no Render |
+| `make-cluster-alive` | `GET /health` | keep-alive de worker VTEX IO não existe no Render |
 
 ---
 

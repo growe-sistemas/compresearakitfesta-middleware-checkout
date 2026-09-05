@@ -96,10 +96,38 @@ chamada. Contrato completo em
 O `DELETE` do `custom_cnpj_data` (requisição 3) também está lá, no mesmo path
 com verbo `DELETE`: tudo que é CNPJ entra e sai por um recurso só.
 
-Faltam dois: `current_address_id` e `custom_delivery_date`, que seguem saindo do
-navegador. A camada de serviço já é genérica (`putCustomData` /
-`deleteCustomData` em `services/vtex/checkout.ts`), então cada um é só uma rota
-nova.
+### E o `custom_delivery_date`
+
+`POST /middleware/checkout/custom-data/delivery-date` ✅ faz a requisição 5 da tabela.
+
+```jsonc
+// request — aceita dd-MM-yyyy, dd/MM/yyyy, YYYY-MM-DD ou data-e-hora ISO
+{ "orderFormId": "cc551425e8a445878344b79b79c48f6d", "deliveryDate": "27-11-2026" }
+
+// response 200
+{
+  "updated": true,
+  "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+  "field": "custom_delivery_date",
+  "value": "27/11/2026",
+  "deliveryDate": "2026-11-27",
+  "confirmed": true,
+  "storedValue": "27/11/2026"
+}
+```
+
+Aceitar data-e-hora existe para o front poder mandar o
+`logisticsInfo[0].slas[0].deliveryWindow.endDateUtc` cru, sem converter antes.
+
+> ⚠️ **Fuso.** Data-e-hora é convertida no calendário de **São Paulo**, não em
+> UTC: `2026-11-27T00:00:00Z` vira `26/11/2026`, que é o dia que o cliente
+> brasileiro vê. O `checkout-ui` fazia o mesmo por acidente — usava
+> `new Date(iso).getDate()`, ou seja, o fuso do *navegador*. Aqui a regra é
+> explícita e não depende de onde o código roda.
+
+Falta um: `current_address_id`, que segue saindo do navegador. A camada de
+serviço já é genérica (`putCustomData` / `deleteCustomData` em
+`services/vtex/checkout.ts`), então é só uma rota nova.
 
 ---
 
@@ -108,7 +136,7 @@ nova.
 | Origem | Escreve `customData`? |
 | --- | --- |
 | `searakifesta-checkout-ui` (o JS do checkout) | **Sim** — os 5 campos. |
-| Este middleware | **Sim: `custom_birth_date` e `custom_cnpj_data`.** Faltam `current_address_id` e `custom_delivery_date`. |
+| Este middleware | **Sim: `custom_birth_date`, `custom_cnpj_data` e `custom_delivery_date`.** Falta `current_address_id`. |
 | App VTEX IO `kitfesta-seara/node` | **Não.** Nenhuma das 16 rotas toca `customData`. |
 | store-theme (`kitfesta-seara/react`) | **Não.** |
 

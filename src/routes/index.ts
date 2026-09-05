@@ -6,7 +6,8 @@ import { customersRouter } from './customers.js';
  * Rotas de negocio.
  *
  * A autenticacao NAO e aplicada aqui em bloco: cada rota do checkout declara
- * no manifesto se e publica ou se exige `x-api-key`. Praticamente todas sao chamadas pelo navegador
+ * em `checkout/routes.ts` se e publica ou se exige `x-api-key`. Praticamente
+ * todas sao chamadas pelo navegador
  * — checkout e componentes React da loja —, onde uma chave em bundle nao seria
  * segredo.
  *

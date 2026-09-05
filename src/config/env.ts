@@ -29,8 +29,8 @@ const envSchema = z.object({
     //
     // Sem barra no final, para concatenar paths sem surpresa. E sem `/api` no
     // final: todo path deste codigo ja comeca com `/api/` (dataentities,
-    // catalog_system, giftcards), entao um `/api` aqui viraria `/api/api/...` e
-    // a VTEX responderia 400 em TODA rota que toca o upstream.
+    // checkout), entao um `/api` aqui viraria `/api/api/...` e a VTEX
+    // responderia 400 em TODA rota que toca o upstream.
     .transform((url) => url.replace(/\/+$/, '').replace(/\/api$/, '')),
 
   /**

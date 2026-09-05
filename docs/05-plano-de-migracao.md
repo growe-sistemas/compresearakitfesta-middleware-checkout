@@ -110,7 +110,7 @@ Uma rota nova só entra em produção com:
 3. paridade verificada contra a rota herdada com payload real — mesma entrada, mesma
    decisão de negócio;
 4. teste do caminho de reprovação, não só do feliz;
-5. rota herdada correspondente marcada como **deprecada** no manifesto, com data.
+5. rota herdada correspondente com o campo `deprecated` preenchido em `routes.ts`.
 
 ---
 

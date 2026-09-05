@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { logger } from '../../config/logger.js';
+import { parseFlexibleDate } from '../../mappers/date.js';
 import { findAddressPosition } from '../../mappers/addressPosition.js';
 import {
   searchDocuments,
@@ -119,48 +120,17 @@ export function convertDate(dateStr: string, joinStr = '-'): string {
 }
 
 /**
- * Normaliza a data de nascimento para `yyyy-MM-dd`.
- *
- * Aceita os dois formatos que circulam por aqui: `dd-MM-yyyy` (o que o
- * `checkout-ui` monta hoje com o proprio `convertDate`) e ISO `yyyy-MM-dd`
- * (o formato padrao deste servico). Sao distinguiveis sem ambiguidade pelo tamanho do
- * primeiro grupo, entao aceitar os dois nao cria armadilha.
- *
- * Devolve `null` quando a data nao existe no calendario (`31-02-1995`), coisa
- * que o `convertDate` sozinho deixava passar direto para o Master Data.
- */
-export function normalizeBirthDate(value: string): string | null {
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
-  const brazilian = /^\d{2}-\d{2}-\d{4}$/.test(value) ? convertDate(value) : null;
-
-  const normalized = iso ?? brazilian;
-  if (normalized === null) return null;
-
-  // `Date.UTC` normaliza excesso (31/02 vira 03/03); comparar de volta
-  // pega a data invalida.
-  const [year, month, day] = normalized.split('-').map(Number) as [number, number, number];
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  const isRealDate =
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day;
-
-  return isRealDate ? normalized : null;
-}
-
-/**
- * Aceita `dd-MM-yyyy` ou `yyyy-MM-dd` e entrega sempre `yyyy-MM-dd`.
+ * Aceita `dd-MM-yyyy`, `dd/MM/yyyy` ou ISO e entrega sempre `yyyy-MM-dd`.
  * O `refine` antes do `transform` e so para a mensagem de erro sair legivel —
  * `pipe` devolveria "expected string, received null".
  */
 const birthDateSchema = z
   .string()
   .min(1)
-  .refine((value) => normalizeBirthDate(value) !== null, {
+  .refine((value) => parseFlexibleDate(value) !== null, {
     message: 'birthDate invalida: use dd-MM-yyyy ou yyyy-MM-dd, com data existente',
   })
-  .transform((value) => normalizeBirthDate(value) as string);
+  .transform((value) => parseFlexibleDate(value) as string);
 
 const setBirthDateParams = z.object({
   email: z.string().min(1),
