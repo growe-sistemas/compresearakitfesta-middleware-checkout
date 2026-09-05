@@ -10,6 +10,7 @@ Status por rota:
 | Rota | Status |
 | --- | --- |
 | [`POST /v2/documents/cnpj/verify`](#26-post-v2documentscnpjverify--implementado) | ✅ **implementado e testado** |
+| [`POST /v2/checkout/corporate-profile`](#26b-post-v2checkoutcorporate-profile--implementado) | ✅ **implementado e testado** |
 | todas as demais | proposta |
 
 As 16 rotas de `/middleware/checkout/` seguem no ar — v1 e v2 convivem
@@ -428,6 +429,118 @@ plugin ST**:
 | `ID_OPTANTE_SIMPLES` | `1` mesmo quando o SN falhava | `null` sem informação → reprova com motivo | evita mandar regime tributário errado ao ERP |
 | `street` vindo da PUBLICA | perdia o tipo (`"PDE ANTONIO…"`) | `"AVENIDA PDE ANTONIO…"` | a PUBLICA separa tipo e nome |
 | `ID_CONTRIBUINTE_ICMS` | fixo `null` | **segue fixo `null`** | fora do escopo aprovado; o dado agora existe em `company.icmsTaxpayer` |
+
+### 2.6b `POST /v2/checkout/corporate-profile` — ✅ IMPLEMENTADO
+
+Faz o que a 2.6 faz **e grava no orderForm**. É o
+`_handleCNPJSearchBtnClickEv` (`checkout-ui/.../controller.js:1512`) inteiro,
+do lado do servidor: hoje o front dispara 4 consultas de CNPJ, consolida no
+navegador e depois faz 4 escritas no orderForm. Aqui é **uma requisição**.
+
+Código: [`src/routes/v2/checkout.ts`](../src/routes/v2/checkout.ts) e
+[`src/mappers/corporateProfile.ts`](../src/mappers/corporateProfile.ts).
+
+```jsonc
+// request
+{
+  "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+  "cnpj": "50.972.373/0001-00",
+  // opcional: dados da tela. Sem eles, valem os que já estão no orderForm.
+  "personal": {
+    "email": "cliente@dominio.com",
+    "firstName": "Gustavo", "lastName": "Borges",
+    "document": "12345678909", "phone": "11999998888"
+  }
+}
+```
+
+```jsonc
+// response 200 — aplicado
+{
+  "data": {
+    "applied": true,
+    "verification": { /* idêntico ao da 2.6 */ },
+    "written": {
+      "clientProfileData": {
+        "email": "cliente@dominio.com",
+        "firstName": "Gustavo", "lastName": "Borges",
+        "document": "12345678909", "documentType": "cpf",
+        "phone": "+5511999998888",
+        "corporateName": "GROWE LTDA",
+        "tradeName": "GROWE LTDA",
+        "corporateDocument": "50972373000100",
+        "stateInscription": "Isento",
+        "corporatePhone": "+551199398511",
+        "isCorporate": true,
+        "profileCompleteOnLoading": false,
+        "profileErrorOnLoading": false,
+        "customerClass": null
+      },
+      "shippingAddress": {
+        "addressType": "residential", "country": "BRA",
+        "postalCode": "04563000",
+        "street": "AV PDE ANTONIO JOSE DOS SANTOS",
+        "number": "258", "complement": "APT 43",
+        "neighborhood": "CIDADE MONCOES",
+        "city": "São Paulo", "state": "SP",
+        "receiverName": "Gustavo Borges"
+      },
+      "customData": { "field": "custom_cnpj_data", "value": "{…}", "confirmed": true }
+    }
+  },
+  "meta": {
+    "cache": { "hit": false },
+    "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
+    "durationMs": 3123
+  }
+}
+```
+
+```jsonc
+// response 200 — CNPJ reprovado: NADA é gravado
+{ "data": { "applied": false, "verification": { "approved": false, "reason": "…", "message": "…" } }, "meta": { … } }
+```
+
+#### As quatro escritas, em ordem
+
+| # | Operação | Por quê |
+| --- | --- | --- |
+| 1 | `POST attachments/shippingData` com `address/availableAddresses/logisticsInfo: null` | limpa o endereço anterior (do PF), senão ele sobrevive em `availableAddresses` e volta no cálculo de frete |
+| 2 | `POST attachments/shippingData` com `selectedAddresses: [endereço da empresa]` | endereço da Junta Comercial, com `clearAddressIfPostalCodeNotFound: false` |
+| 3 | `POST attachments/clientProfileData` | campos corporativos + `isCorporate: true`, **preservando** os dados de PF do comprador |
+| 4 | `PUT customData/custom_cnpj_data/custom_cnpj_data` | os 11 campos fiscais, serializados |
+
+**Em ordem, não em paralelo.** O front usa `Promise.all`
+(`controller.js:1726`), mas attachments do orderForm são estado compartilhado:
+escritas concorrentes podem se sobrepor, e a resposta de uma não reflete as
+outras. Sequencial, cada passo enxerga o anterior.
+
+#### Diferenças de comportamento em relação ao front
+
+| | Front hoje | Esta rota |
+| --- | --- | --- |
+| CNPJ reprovado | já tinha limpado o `shippingData` antes de validar → orderForm fica **sem endereço** | não escreve nada; `applied: false` |
+| Escritas | `Promise.all` (concorrentes) | sequenciais |
+| Dados de PF | lidos do DOM | do `orderForm`, com `personal` do corpo como override |
+| Confirmação do `customData` | nenhuma | valor relido da resposta; divergência → `502 CUSTOM_DATA_NOT_PERSISTED` |
+
+#### Erros
+
+| Status | Código | Quando |
+| --- | --- | --- |
+| `400` | `VALIDATION_ERROR` | CNPJ com dígito verificador errado (zero consulta paga), `orderFormId` fora do formato |
+| `400` | `MISSING_CLIENT_EMAIL` | nem o orderForm nem `personal.email` têm e-mail — sem ele não dá para montar `clientProfileData` |
+| `502` | `CUSTOM_DATA_NOT_PERSISTED` | a VTEX aceitou a gravação mas devolveu outro valor |
+
+#### Ponto em aberto: `tradeName`
+
+O front grava a **razão social** em `corporateName` **e** em `tradeName`
+(`controller.js:1704` usa `data?.nome` nos dois). O correto seria o nome
+fantasia. Esta rota **mantém a paridade** — mudar é uma linha em
+`buildCorporateProfile`, mas altera o que o ERP recebe para empresas em que os
+dois nomes diferem. Decisão do time do ERP.
+
+---
 
 ### 2.7 `POST /v2/gift-cards/lookup`
 

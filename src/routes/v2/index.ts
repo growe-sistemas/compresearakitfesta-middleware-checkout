@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { applyCorporateProfile } from './checkout.js';
 import { verifyCnpjRoute } from './documents.js';
 
 /**
@@ -16,3 +17,4 @@ import { verifyCnpjRoute } from './documents.js';
 export const v2Router: Router = Router();
 
 v2Router.post('/v2/documents/cnpj/verify', verifyCnpjRoute);
+v2Router.post('/v2/checkout/corporate-profile', applyCorporateProfile);

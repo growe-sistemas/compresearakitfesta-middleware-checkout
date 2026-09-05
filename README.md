@@ -168,6 +168,17 @@ da URL, decisão pronta em vez de dado bruto). Detalhes em
 | Rota | Método | Auth | Substitui |
 | --- | --- | --- | --- |
 | `/v2/documents/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
+| `/v2/checkout/corporate-profile` | POST | pública | o `_handleCNPJSearchBtnClickEv` inteiro: as 4 consultas de CNPJ **e** as 4 escritas no orderForm |
+
+```bash
+curl -X POST http://localhost:3000/v2/checkout/corporate-profile -H 'Content-Type: application/json' -d '{"orderFormId":"cc551425e8a445878344b79b79c48f6d","cnpj":"50.972.373/0001-00","personal":{"email":"cliente@dominio.com","firstName":"Gustavo","lastName":"Borges"}}'
+```
+
+Busca o CNPJ e popula o orderForm: `clientProfileData` corporativo (preservando
+os dados de PF do comprador), endereço da Junta Comercial em `shippingData` e os
+11 campos fiscais em `customData.custom_cnpj_data`. As escritas são
+**sequenciais**, e **CNPJ reprovado não grava nada** — ao contrário do front,
+que já tinha limpado o endereço antes de validar.
 
 E, no mesmo prefixo `/middleware/checkout/`, a operação do `setInfo` agora aceita **corpo** em vez
 de parâmetros de URL:

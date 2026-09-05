@@ -57,6 +57,8 @@ export const orderFormIdSchema = z
 const orderFormSchema = z
   .object({
     orderFormId: z.string().optional(),
+    /** Perfil ja preenchido no passo de dados. Base do merge no fluxo PJ. */
+    clientProfileData: z.record(z.unknown()).nullable().optional(),
     customData: z
       .object({
         customApps: z
@@ -151,4 +153,49 @@ export async function deleteCustomData(options: {
   });
 
   return { orderFormId: orderForm?.orderFormId ?? null };
+}
+
+/** `GET /api/checkout/pub/orderForm/{id}` — le o orderForm atual. */
+export async function getOrderForm(orderFormId: string): Promise<OrderFormResponse> {
+  return vtexRequest({
+    path: `/api/checkout/pub/orderForm/${orderFormId}`,
+    schema: orderFormSchema,
+  });
+}
+
+/**
+ * `POST /api/checkout/pub/orderForm/{id}/attachments/{attachmentId}`.
+ *
+ * Mesma operacao do `vtexjs.checkout.sendAttachment` do front, do lado do
+ * servidor. Usada para `clientProfileData` e `shippingData`.
+ */
+export async function sendAttachment(options: {
+  orderFormId: string;
+  attachmentId: string;
+  payload: Record<string, unknown>;
+}): Promise<OrderFormResponse> {
+  const { orderFormId, attachmentId, payload } = options;
+
+  return vtexRequest({
+    path: `/api/checkout/pub/orderForm/${orderFormId}/attachments/${attachmentId}`,
+    method: 'POST',
+    body: payload,
+    schema: orderFormSchema,
+  });
+}
+
+/**
+ * Zera o endereco do orderForm.
+ *
+ * No fluxo PJ isso vem ANTES de gravar o endereco da empresa: sem limpar, o
+ * endereco anterior (do PF) pode sobreviver em `availableAddresses` e voltar a
+ * ser escolhido no calculo de frete. O `checkout-ui` faz o mesmo
+ * (`clearShippingData`, `orderForm.js:52`).
+ */
+export async function clearShippingData(orderFormId: string): Promise<OrderFormResponse> {
+  return sendAttachment({
+    orderFormId,
+    attachmentId: 'shippingData',
+    payload: { address: null, availableAddresses: null, logisticsInfo: null },
+  });
 }

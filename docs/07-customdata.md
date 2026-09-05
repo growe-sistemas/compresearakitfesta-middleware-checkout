@@ -86,10 +86,17 @@ Duas coisas a saber:
    rota distinguir carrinho real de carrinho recém-criado — o front deve sempre
    passar `vtexjs.checkout.orderForm.orderFormId`.
 
-Os outros três campos (`custom_cnpj_data`, `current_address_id`,
-`custom_delivery_date`) seguem sendo escritos pelo navegador. A camada de
-serviço já é genérica (`putCustomData` / `deleteCustomData`), então cada um é
-só uma rota nova.
+### O `custom_cnpj_data` também já é gravado pelo servidor
+
+`POST /v2/checkout/corporate-profile` ✅ faz a requisição 2 da tabela — e mais:
+grava o `clientProfileData` corporativo e o endereço da Junta Comercial na mesma
+chamada. Contrato completo em
+[04, seção 2.6b](04-contratos-v2.md#26b-post-v2checkoutcorporate-profile--implementado).
+
+Faltam dois: `current_address_id` e `custom_delivery_date`, que seguem saindo do
+navegador. A camada de serviço já é genérica (`putCustomData` /
+`deleteCustomData` em `services/vtex/checkout.ts`), então cada um é só uma rota
+nova. O `DELETE` do `custom_cnpj_data` (requisição 3) também ainda não tem rota.
 
 ---
 
@@ -98,18 +105,16 @@ só uma rota nova.
 | Origem | Escreve `customData`? |
 | --- | --- |
 | `searakifesta-checkout-ui` (o JS do checkout) | **Sim** — os 5 campos. |
-| Este middleware | **Sim, `custom_birth_date`** (rota acima). Os outros 4, ainda não. |
+| Este middleware | **Sim: `custom_birth_date` e `custom_cnpj_data`.** Faltam `current_address_id` e `custom_delivery_date`. |
 | App VTEX IO `kitfesta-seara/node` | **Não.** Nenhuma das 16 rotas toca `customData`. |
 | store-theme (`kitfesta-seara/react`) | **Não.** |
 
-Toda escrita sai **do navegador direto para a VTEX**, em
+No `checkout-ui`, toda escrita sai **do navegador direto para a VTEX**, em
 `PUT|DELETE /api/checkout/pub/orderForm/{orderFormId}/customData/{app}/{field}`,
-autenticada pelo cookie de sessão do próprio cliente. O middleware nunca vê
-esse tráfego.
+autenticada pelo cookie de sessão do próprio cliente.
 
-O que o middleware faz é **produzir o conteúdo** de um deles: o
-`POST /v2/documents/cnpj/verify` devolve `data.erpCustomData`, que é exatamente
-o payload de `custom_cnpj_data` — mas quem grava continua sendo o front.
+No middleware, as escritas usam a AppKey da aplicação, e o `orderFormId` do
+corpo da requisição é a credencial da operação.
 
 ---
 
