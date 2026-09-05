@@ -1,5 +1,6 @@
 import express, { Router, type RequestHandler } from 'express';
 import { requireApiKey } from '../../middleware/auth.js';
+import { setBirthDateCustomData } from './customData.js';
 import { getEmployee } from './employee.js';
 import { createGiftCard, getGiftCardInfoFromMD } from './giftCard.js';
 import { getDataInMasterData, updateDataMD } from './genericMasterData.js';
@@ -18,17 +19,16 @@ import {
   getDataSintegraST,
 } from './sintegra.js';
 import { sitemap } from './sitemap.js';
-import { LEGACY_ROUTES, type LegacyRouteName } from './manifest.js';
+import { CHECKOUT_ROUTES, type CheckoutRouteName } from './manifest.js';
 
 /**
- * Rotas portadas do app VTEX IO (`kitfesta-seara/node`).
+ * Rotas do checkout, sob `/middleware/checkout/*`.
  *
- * O path, o verbo e a visibilidade saem do manifesto (copia fiel do
- * `service.json`); o handler de cada uma esta nos modulos deste diretorio.
- * O mapa abaixo obriga o compilador a cobrir TODAS as rotas do manifesto —
- * rota nova sem handler nao compila.
+ * O path, o verbo e a visibilidade saem do manifesto; o handler de cada uma
+ * esta nos modulos deste diretorio. O mapa abaixo obriga o compilador a cobrir
+ * TODAS as rotas do manifesto — rota nova sem handler nao compila.
  */
-const HANDLERS: Record<LegacyRouteName, RequestHandler> = {
+const HANDLERS: Record<CheckoutRouteName, RequestHandler> = {
   makeClusterAlive,
   getAddressPosition,
   getAddresState,
@@ -47,13 +47,13 @@ const HANDLERS: Record<LegacyRouteName, RequestHandler> = {
   sitemap,
 };
 
-export const legacyRouter: Router = Router();
+export const checkoutRouter: Router = Router();
 
 // O app VTEX IO lia o corpo com `co-body` dentro de cada handler, aceitando
 // JSON mesmo sem Content-Type correto. `type: '*/*'` reproduz isso.
 const parseBody = express.json({ limit: '1mb', type: '*/*' });
 
-for (const route of LEGACY_ROUTES) {
+for (const route of CHECKOUT_ROUTES) {
   // Rota publica (o `public: true` do service.json) nao passa pelo auth.
   const chain: RequestHandler[] = route.isPublic ? [] : [requireApiKey];
   const handler = HANDLERS[route.name];
@@ -61,22 +61,22 @@ for (const route of LEGACY_ROUTES) {
   for (const method of route.methods) {
     switch (method) {
       case 'GET':
-        legacyRouter.get(route.path, ...chain, handler);
+        checkoutRouter.get(route.path, ...chain, handler);
         break;
       case 'POST':
-        legacyRouter.post(route.path, ...chain, parseBody, handler);
+        checkoutRouter.post(route.path, ...chain, parseBody, handler);
         break;
       case 'ALL':
         // Rota sem verbo declarado no original: aceita qualquer um, e o corpo
         // e opcional (varias delas leem parametros do corpo mesmo em GET).
-        legacyRouter.all(route.path, ...chain, parseBody, handler);
+        checkoutRouter.all(route.path, ...chain, parseBody, handler);
         break;
     }
   }
 }
 
 /**
- * Fora do manifesto de proposito: o `LEGACY_ROUTES` e copia fiel do
+ * Fora do manifesto de proposito: o `CHECKOUT_ROUTES` e copia fiel do
  * `service.json` do app VTEX IO, e esta rota nao existe la.
  *
  * `POST|PUT /middleware/checkout/setInfo` faz a mesma coisa que
@@ -86,5 +86,17 @@ for (const route of LEGACY_ROUTES) {
  * Nao ha conflito de rota: o Express casa por numero de segmentos, entao
  * `/setInfo` e `/setInfo/:email/:birthDate` sao caminhos distintos.
  */
-legacyRouter.post('/middleware/checkout/setInfo', parseBody, setBirthDateCLFromBody);
-legacyRouter.put('/middleware/checkout/setInfo', parseBody, setBirthDateCLFromBody);
+checkoutRouter.post('/middleware/checkout/setInfo', parseBody, setBirthDateCLFromBody);
+checkoutRouter.put('/middleware/checkout/setInfo', parseBody, setBirthDateCLFromBody);
+
+/**
+ * Escrita de `customData` do orderForm — tambem fora do manifesto.
+ *
+ * Ate aqui esse `PUT` saia do navegador; agora e o middleware quem grava.
+ * O par app/field vem de `CUSTOM_DATA_FIELDS`, nao de string literal.
+ */
+checkoutRouter.post(
+  '/middleware/checkout/custom-data/birth-date',
+  parseBody,
+  setBirthDateCustomData,
+);

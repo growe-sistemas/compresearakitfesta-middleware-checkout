@@ -10,12 +10,13 @@ compartilhado e devolve os dados normalizados.
 - Deploy no Render via Blueprint (`render.yaml`)
 
 > **Status:** base pronta (config, clients, auth, erros, health, deploy) e as
-> **16 rotas do app VTEX IO `kitfesta-seara/node` portadas com a lógica delas**.
+> **16 rotas sob `/middleware/checkout/*`**, com a lógica que o app VTEX IO
+> `kitfesta-seara/node` tinha, mais as rotas novas da v2.
 > As rotas do orderForm ainda não existem — o de/para sai do payload real da
 > requisição. Ver [Endpoints](#endpoints) e [Mapeamento](#mapeamento-depara).
 
 📚 **[`docs/`](docs/README.md)** — regra de negócio do checkout, mapa das
-chamadas do front, diagnóstico do legado e os
+chamadas do front, diagnóstico do app VTEX IO e os
 [contratos da API v2](docs/04-contratos-v2.md) (proposta das requisições novas).
 
 ---
@@ -125,7 +126,7 @@ header nenhum. Uma chave dentro de bundle de front não é segredo — apareceri
 no DevTools de qualquer visitante.
 
 A visibilidade de cada rota fica no campo `isPublic` de
-[`src/routes/legacy/manifest.ts`](src/routes/legacy/manifest.ts).
+[`src/routes/checkout/manifest.ts`](src/routes/checkout/manifest.ts).
 
 Uma única rota exige autenticação:
 
@@ -168,12 +169,13 @@ da URL, decisão pronta em vez de dado bruto). Detalhes em
 | --- | --- | --- | --- |
 | `/v2/documents/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
 
-E, no path legado, a mesma operação do `setInfo` agora aceita **corpo** em vez
+E, no mesmo prefixo `/middleware/checkout/`, a operação do `setInfo` agora aceita **corpo** em vez
 de parâmetros de URL:
 
 | Rota | Método | Auth | Substitui |
 | --- | --- | --- | --- |
 | `/middleware/checkout/setInfo` | POST, PUT | pública | `/middleware/checkout/setInfo/:email/:birthDate` |
+| `/middleware/checkout/custom-data/birth-date` | POST | pública | o `PUT` de `customData` que o `checkout-ui` fazia direto na VTEX |
 
 ```bash
 curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type: application/json' -d '{"email":"cliente@dominio.com","birthDate":"24-11-1995"}'
@@ -184,6 +186,18 @@ curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type:
 Master Data. A resposta é idêntica à da rota antiga — migrar o front é trocar só
 o `fetch`. A versão por path continua no ar, **depreciada** (loga um `warn` a
 cada uso).
+
+E a gravação de `customData` no orderForm, que saía do navegador, agora tem rota
+própria:
+
+```bash
+curl -X POST http://localhost:3000/middleware/checkout/custom-data/birth-date -H 'Content-Type: application/json' -d '{"orderFormId":"ed241201694149eca1581915be35c4ce","birthDate":"24-11-1995"}'
+```
+
+Grava `customData.custom_birth_date` (no formato `dd/mm/yyyy` de sempre) e
+**confere a gravação na própria resposta da VTEX**, sem requisição extra —
+divergência vira `502 CUSTOM_DATA_NOT_PERSISTED` em vez de um "gravado" falso.
+Detalhes e os outros campos em [`docs/07-customdata.md`](docs/07-customdata.md).
 
 ```bash
 curl -X POST http://localhost:3000/v2/documents/cnpj/verify -H 'Content-Type: application/json' -d '{"cnpj":"50.972.373/0001-00","fallbackEmail":"cliente@dominio.com"}'
@@ -200,12 +214,12 @@ saiu; `missingFiscalFields` diz exatamente o que faltou quando reprova.
 > passa a chegar sempre. Tabela completa em
 > [`docs/04`, seção 2.6](docs/04-contratos-v2.md#26-post-v2documentscnpjverify--implementado).
 
-### Rotas portadas do app VTEX IO
+### Rotas sob `/middleware/checkout/*`
 
 As 16 rotas declaradas em `kitfesta-seara/node/service.json` foram copiadas
-para [`src/routes/legacy/manifest.ts`](src/routes/legacy/manifest.ts) — path e
+para [`src/routes/checkout/manifest.ts`](src/routes/checkout/manifest.ts) — path e
 verbo **exatamente** como no original — e registradas em
-[`src/routes/legacy/index.ts`](src/routes/legacy/index.ts).
+[`src/routes/checkout/index.ts`](src/routes/checkout/index.ts).
 
 **Os paths foram renomeados**: o prefixo `/_v1/private/middleware/` do VTEX IO
 virou `/middleware/checkout/`. O nome de cada rota e o resto do path seguem
@@ -213,7 +227,7 @@ idênticos, então migrar o front é um find-and-replace do prefixo.
 `/_v1/make-cluster-alive` e `/_v/sitemap` também foram para baixo do mesmo
 prefixo.
 
-A **lógica de cada uma foi portada** dos handlers originais em
+A **lógica de cada uma veio** dos handlers em
 `kitfesta-seara/node/middlewares/`. O que mudou de infraestrutura:
 
 - `ctx.vtex.authToken` + settings do `store-theme` → `VTEX_APPKEY`/`VTEX_APPTOKEN`
@@ -264,7 +278,7 @@ O que isso implica, e vale ter em mente:
 Mitigação disponível hoje sem mudar contrato: apontar `CORS_ORIGINS` para o
 domínio da loja. Isso só barra navegador — `curl` continua passando.
 
-#### O que foi corrigido no porte
+#### O que foi corrigido em relação ao app VTEX IO
 
 - **Loop infinito** em `createGiftCard`: o original fazia
   `while (mdResult.length > 0)` regenerando os códigos **sem reconsultar** o
@@ -284,7 +298,7 @@ domínio da loja. Isso só barra navegador — `curl` continua passando.
 - `getDataSintegraST` chama o plugin **RF**, não o ST — é um bug de
   copiar-e-colar do original (`getDataFromST` existia no client e nunca era
   usado). Mantido para não mudar a resposta de quem já consome; para corrigir,
-  troque por `getCnpjFromST` em [`src/routes/legacy/sintegra.ts`](src/routes/legacy/sintegra.ts).
+  troque por `getCnpjFromST` em [`src/routes/checkout/sintegra.ts`](src/routes/checkout/sintegra.ts).
 - `getDataRamdom` só devolve `{"ok":"ok"}` — no original ele carregava as
   settings do app e descartava. Sem VTEX IO não há settings; virou um segundo
   health check.
@@ -445,7 +459,7 @@ commits na `main` disparam deploy automático (`autoDeploy: true`).
 src/
 ├─ config/        env (zod, fail-fast) e logger (pino, com redaction)
 ├─ middleware/    auth por x-api-key, errorHandler, request-id + log HTTP
-├─ routes/        health (público), router protegido e legacy/ (rotas portadas)
+├─ routes/        health, checkout/ (/middleware/checkout/*) e v2/ (contrato novo)
 ├─ services/
 │  ├─ http/       núcleo HTTP: timeout, retry com backoff, parse por schema
 │  ├─ vtex/       cliente VTEX + masterdata, catalog, giftcard

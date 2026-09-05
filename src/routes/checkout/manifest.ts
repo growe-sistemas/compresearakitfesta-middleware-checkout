@@ -1,52 +1,51 @@
 /**
- * Inventario das rotas portadas do app VTEX IO
- * `C:\Growe\stores\kitfesta-seara\node\service.json`.
+ * Manifesto das rotas sob `/middleware/checkout/*`: path, verbo e visibilidade
+ * em um lugar so, longe do handler.
  *
- * PATHS RENOMEADOS: o prefixo `/_v1/private/middleware/` do VTEX IO virou
- * `/middleware/checkout/`. O nome de cada rota e o resto do path seguem
- * identicos, entao migrar o front e um find-and-replace do prefixo.
- * `/_v1/make-cluster-alive` e `/_v/sitemap` tambem foram para baixo do mesmo
- * prefixo.
+ * Os nomes das rotas vem do app VTEX IO que este servico substitui
+ * (`kitfesta-seara/node`) e continuam iguais **de proposito**: enquanto o
+ * `checkout-ui` em producao chamar estes paths, renomear um quebra a loja. O
+ * prefixo, esse sim, mudou — `/_v1/private/middleware/` virou
+ * `/middleware/checkout/`.
  *
- * O metodo segue o `index.ts` do app: onde ele NAO envolveu o handler em
- * `method({...})`, a rota aceita qualquer verbo no VTEX IO — aqui isso vira
- * `ALL` em vez de chutar GET.
+ * Alguns nomes tem defeito conhecido (`getAddresState` e `getDataRamdom` com
+ * typo, `getInfo`/`setInfo` que nao dizem o que fazem). A padronizacao deles
+ * exige migrar o consumidor antes — ver `docs/05-plano-de-migracao.md`.
  *
- * A logica de cada rota foi portada dos handlers originais em
- * `node/middlewares/*.ts`. O campo `handlers` guarda a origem de cada uma.
+ * `ALL` marca rota que aceita qualquer verbo. Tambem e comportamento que o
+ * front ja depende, nao desleixo.
  */
 
-export type LegacyMethod = 'GET' | 'POST' | 'ALL';
+export type CheckoutRouteMethod = 'GET' | 'POST' | 'ALL';
 
-export interface LegacyRoute {
-  /** Chave da rota no service.json / index.ts. */
+export interface CheckoutRoute {
+  /** Identificador da rota. E a chave do mapa de handlers. */
   readonly name: string;
-  /** Path exatamente como declarado no service.json. */
+  /** Path completo, como o front chama. */
   readonly path: string;
+  /** Verbos aceitos. `ALL` = qualquer verbo cai no handler. */
+  readonly methods: readonly CheckoutRouteMethod[];
   /**
-   * Verbos aceitos. `ALL` = o app original nao declarou `method({...})`,
-   * entao qualquer verbo cai no handler.
+   * De qual arquivo do app VTEX IO a logica veio, na ordem em que rodava.
+   * Rastreabilidade para auditar comportamento — nao e dependencia.
    */
-  readonly methods: readonly LegacyMethod[];
-  /** Arquivo(s) de handler no app VTEX IO, na ordem em que rodam. */
-  readonly handlers: readonly string[];
+  readonly origin: readonly string[];
   /**
-   * `true` = sem autenticacao, como o `public: true` do service.json.
-   * `false` = exige `x-api-key`. So vale para rota que o navegador NAO chama:
-   * chave em bundle de front nao e segredo.
+   * `true` = sem autenticacao. `false` = exige `x-api-key`, e so vale para
+   * rota que o navegador NAO chama: chave em bundle de front nao e segredo.
    */
   readonly isPublic: boolean;
-  /** Observacao relevante para quando formos reescrever a rota. */
+  /** Observacao relevante para quem for mexer na rota. */
   readonly note?: string;
 }
 
-export const LEGACY_ROUTES = [
+export const CHECKOUT_ROUTES = [
   {
     name: 'makeClusterAlive',
     path: '/middleware/checkout/make-cluster-alive',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/makeClusterAlive.ts'],
+    origin: ['middlewares/makeClusterAlive.ts'],
     note: 'Keep-alive do cluster VTEX IO. Provavelmente nao faz sentido no Render (nao ha cold start de worker do mesmo tipo).',
   },
   {
@@ -54,7 +53,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getAddressPosition/',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getAddressPosition.ts'],
+    origin: ['middlewares/getAddressPosition.ts'],
     note: 'Le userId/email/zipCodeCheckout/numberCheckout do CORPO, apesar de aceitar qualquer verbo.',
   },
   {
@@ -62,7 +61,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getAddresState/',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getAddresState.ts'],
+    origin: ['middlewares/getAddresState.ts'],
     note: 'Typo no nome original ("Addres"). Le userId do CORPO apesar de aceitar qualquer verbo.',
   },
   {
@@ -70,7 +69,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getDataSintegraRF/:cnpj',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getDataSintegraRF.ts'],
+    origin: ['middlewares/getDataSintegraRF.ts'],
     note: 'Client sintegra.ts com memoryCache (LRU 5000) no app original.',
   },
   {
@@ -78,7 +77,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getDataSintegraSN/:cnpj',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getDataSintegraSN.ts'],
+    origin: ['middlewares/getDataSintegraSN.ts'],
     note: 'Client sintegra.ts com memoryCache no app original.',
   },
   {
@@ -86,7 +85,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getDataSintegraST/:cnpj',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getDataSintegraST.ts'],
+    origin: ['middlewares/getDataSintegraST.ts'],
     note: 'Client sintegra.ts com memoryCache no app original.',
   },
   {
@@ -94,7 +93,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getDataSintegraCPF/:cpf/:date',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getDataSintegraCPF.ts'],
+    origin: ['middlewares/getDataSintegraCPF.ts'],
     note: 'CPF e data de nascimento vao na URL — dado pessoal em path. Rever ao migrar.',
   },
   {
@@ -102,7 +101,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getEmployee/:cpf',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getEmployee.ts'],
+    origin: ['middlewares/getEmployee.ts'],
     note: 'Existe tambem middlewares/backup-employe.ts no app original.',
   },
   {
@@ -110,7 +109,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getDataRamdom/',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getDataRamdom.ts'],
+    origin: ['middlewares/getDataRamdom.ts'],
     note: 'Typo no nome original ("Ramdom"). Candidato a renomear.',
   },
   {
@@ -118,7 +117,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getInfo/:email',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getBirthDateCL.ts'],
+    origin: ['middlewares/getBirthDateCL.ts'],
     note: 'Nome da rota e path divergem (getBirthDateCL vs /getInfo).',
   },
   {
@@ -126,7 +125,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/setInfo/:email/:birthDate',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/setBirthDateCL.ts'],
+    origin: ['middlewares/setBirthDateCL.ts'],
     note: 'Escrita via path param e sem metodo declarado — um GET altera dado. Rever ao migrar.',
   },
   {
@@ -134,14 +133,14 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/md/update',
     isPublic: true,
     methods: ['POST'],
-    handlers: ['middlewares/updateDataMD.ts'],
+    origin: ['middlewares/updateDataMD.ts'],
   },
   {
     name: 'createGiftCard',
     path: '/middleware/checkout/createGiftCard/',
     isPublic: false,
     methods: ['POST'],
-    handlers: [
+    origin: [
       'middlewares/generateUniqueGiftCardInfos.ts',
       'middlewares/createGiftCard.ts',
       'middlewares/addGiftCardBalance.ts',
@@ -153,7 +152,7 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getGiftCardInfoFromMD/',
     isPublic: true,
     methods: ['ALL'],
-    handlers: ['middlewares/getGiftInfoFromMD.ts'],
+    origin: ['middlewares/getGiftInfoFromMD.ts'],
     note: 'Arquivo do handler chama-se getGiftInfoFromMD.ts (sem "Card").',
   },
   {
@@ -161,16 +160,16 @@ export const LEGACY_ROUTES = [
     path: '/middleware/checkout/getDataInMasterData',
     isPublic: true,
     methods: ['POST'],
-    handlers: ['middlewares/getDataInMasterData.ts'],
+    origin: ['middlewares/getDataInMasterData.ts'],
   },
   {
     name: 'sitemap',
     path: '/middleware/checkout/sitemap/:type?',
     isPublic: true,
     methods: ['GET'],
-    handlers: ['middlewares/sitemap.ts'],
+    origin: ['middlewares/sitemap.ts'],
     note: 'Param opcional. Existe tambem middlewares/sitemap-backup.ts no app original.',
   },
-] as const satisfies readonly LegacyRoute[];
+] as const satisfies readonly CheckoutRoute[];
 
-export type LegacyRouteName = (typeof LEGACY_ROUTES)[number]['name'];
+export type CheckoutRouteName = (typeof CHECKOUT_ROUTES)[number]['name'];

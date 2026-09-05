@@ -41,7 +41,7 @@ export const getDataSintegraSN = asyncHandler(async (req, res) => {
 });
 
 /**
- * ATENCAO — porte fiel de um bug do original:
+ * ATENCAO — bug reproduzido de proposito:
  * `middlewares/getDataSintegraST.ts` chama `clients.sintegra.cnpj.getDataFromRF`,
  * ou seja, a rota ST devolve dados do plugin RF. O `getDataFromST` existia no
  * client e nunca era usado.

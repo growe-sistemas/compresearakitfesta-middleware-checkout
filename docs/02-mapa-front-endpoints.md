@@ -3,14 +3,14 @@
 Inventário de **toda** chamada HTTP que sai do checkout, com o payload real
 observado no código. Serve de base para o de/para da v2.
 
-Prefixo legado: `/_v1/private/middleware/` (VTEX IO).
-Prefixo do porte atual neste repositório: `/middleware/checkout/`.
+Prefixo no app VTEX IO: `/_v1/private/middleware/`.
+Prefixo neste repositório: `/middleware/checkout/`.
 
 ---
 
 ## 1. Chamadas ao middleware
 
-| # | Origem no front | Rota legada | Verbo real | Upstream |
+| # | Origem no front | Rota | Verbo real | Upstream |
 | --- | --- | --- | --- | --- |
 | 1 | `services/PF.js:29`, `addressPF/index.js:23` | `getAddresState/` | POST | Master Data CL + AD |
 | 2 | `SetAddress/index.js:32` | `getAddressPosition/` | POST | Master Data CL + AD |
@@ -91,7 +91,7 @@ Master Data, ou `{ "updated": false, "reason": "..." }` se não houver CL.
 
 **7–10. Sintegra** — resposta crua do provedor. `code: "0"` = sucesso; qualquer
 outro valor é erro de negócio (o provedor responde **HTTP 200 mesmo em erro**).
-No legado isso vira 403 (com `message`) ou 408 (sem).
+No middleware isso vira 403 (com `message`) ou 408 (sem).
 
 **11. `getGiftCardInfoFromMD`**
 

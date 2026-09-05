@@ -69,7 +69,7 @@ sustenta as travas de endereço e CPF, que dependem de `userProfileId`.
 primeiro e-mail que o cadastrou.
 
 > 🔓 Hoje essa checagem devolve **o e-mail de outro cliente para o navegador**.
-> Ver [diagnóstico](03-diagnostico-legado.md).
+> Ver [diagnóstico](03-diagnostico-app-vtex-io.md).
 
 ---
 
@@ -214,7 +214,7 @@ Disparado pelo botão **"Buscar"** injetado ao lado do campo de CNPJ
 | --- | --- | --- |
 | `RF` | `getDataSintegraRF/:cnpj` | Receita Federal via SintegraWS |
 | `SN` | `getDataSintegraSN/:cnpj` | Simples Nacional via SintegraWS |
-| `IE` | `getDataSintegraST/:cnpj` | **devolve RF, não ST** — bug do middleware legado |
+| `IE` | `getDataSintegraST/:cnpj` | **devolve RF, não ST** — bug herdado do app VTEX IO |
 | `PUBLICA` | `https://publica.cnpj.ws/cnpj/<cnpj>` | **chamada direta do navegador**, timeout de 15 s, normalizada por `convertPJtoDesiredInterface` |
 
 Antes disso, `_getCnpjInfoMd` procura o CNPJ na entidade **CB**

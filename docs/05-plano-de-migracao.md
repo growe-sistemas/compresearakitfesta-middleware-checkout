@@ -1,17 +1,17 @@
 # Plano de migração
 
-Como sair de "16 rotas legadas portadas" para a API v2 sem parar a loja.
+Como sair das 16 rotas herdadas do app VTEX IO para a API v2 sem parar a loja.
 
 ---
 
 ## 1. Princípio: convivência, não *big bang*
 
-`/middleware/checkout/*` (v1, porte fiel) e `/v2/*` **coexistem** no mesmo
+`/middleware/checkout/*` (v1) e `/v2/*` **coexistem** no mesmo
 serviço. O front migra rota a rota. Nenhuma rota v1 é apagada antes de o
 `checkout-ui` parar de chamá-la em produção.
 
 ```
-front atual  ──► /middleware/checkout/getAddresState      (v1, porte fiel)
+front atual  ──► /middleware/checkout/getAddresState      (v1)
 front novo   ──► /v2/customers/addresses/lookup           (v2)
                         │
                         └── mesma camada de serviços (services/vtex, services/sintegra, services/seara)

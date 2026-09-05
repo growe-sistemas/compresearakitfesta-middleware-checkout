@@ -1,8 +1,7 @@
-# Diagnóstico do legado
+# Diagnóstico do app VTEX IO
 
 O que está inconsistente, quebrado ou perigoso na dupla
-`checkout-ui` + app VTEX IO — e o que já foi resolvido no porte deste
-repositório. Cada item vira um requisito da v2.
+`checkout-ui` + app VTEX IO — e o que já foi resolvido neste repositório. Cada item vira um requisito da v2.
 
 ---
 
@@ -75,11 +74,11 @@ rotacionados.**
 
 | # | Onde | Bug | Situação |
 | --- | --- | --- | --- |
-| B1 | `middlewares/getDataSintegraST.ts` | chama `getDataFromRF`, não `getDataFromST` — a chave `IE` do front é preenchida com dados da RF | **preservado** no porte (`routes/legacy/sintegra.ts`), para não mudar a resposta |
+| B1 | `middlewares/getDataSintegraST.ts` | chama `getDataFromRF`, não `getDataFromST` — a chave `IE` do front é preenchida com dados da RF | **preservado** em `routes/checkout/sintegra.ts`, para não mudar a resposta |
 | B2 | `middlewares/generateUniqueGiftCardInfos.ts` | `while (mdResult.length > 0)` regenerava códigos **sem reconsultar** o Master Data → laço infinito na primeira colisão | **corrigido** (rebusca a cada tentativa, limite de 10) |
 | B3 | `createGiftCard` / `addGiftCardBalance` | `catch { console.log }` e seguia como se tivesse dado certo | **corrigido** (erro sobe) |
 | B4 | `getEmployee` | CPF concatenado cru no XML → injeção | **corrigido** (escapado) |
-| B5 | `getAddressPosition` | `getAddresInfo` faz `auxClientData[0].id` sem guarda → `TypeError` quando o CL não existe (só o `getAddresState` recebeu a correção) | **corrigido** no porte |
+| B5 | `getAddressPosition` | `getAddresInfo` faz `auxClientData[0].id` sem guarda → `TypeError` quando o CL não existe (só o `getAddresState` recebeu a correção) | **corrigido** aqui |
 | B6 | `controller.js:252` | `=` no lugar de `===` na checagem de hash | **aberto** (front) |
 | B7 | `controller.js:1573` | `PUBLICA?.situacao_cadastral` não existe no objeto convertido (é `situacao`) | **aberto** (front) |
 | B8 | `controller.js:1893` | ramo `if (RF)` de `get_NATUREZA_JURIDICA` devolve `PUBLICA?.natureza_juridica` | **aberto** (front) |
@@ -97,7 +96,7 @@ detalhe e payloads em [06](06-sintegra-e-orderform.md).
 
 ## C. Inconsistência de contrato
 
-Cada rota do legado inventou o seu formato. Hoje convivem **cinco** estilos de
+Cada rota do app VTEX IO inventou o seu formato. Hoje convivem **cinco** estilos de
 resposta:
 
 | Estilo | Exemplo |
@@ -157,7 +156,7 @@ Nomes também não seguem padrão: `getAddresState` (typo), `getDataRamdom`
 
 ---
 
-## F. O que o porte atual já resolveu
+## F. O que este repositório já resolveu
 
 Vale registrar para não refazer:
 

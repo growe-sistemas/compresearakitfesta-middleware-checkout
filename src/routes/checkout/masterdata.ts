@@ -201,6 +201,11 @@ async function applyBirthDate(
     birthDate: `${isoBirthDate}T00:00:00+00:00`,
   });
 
+  logger.info(
+    { email, id, birthDate: isoBirthDate, operation: 'update' },
+    'Cliente CL ATUALIZADO: data de nascimento gravada',
+  );
+
   return { updated: true, id };
 }
 

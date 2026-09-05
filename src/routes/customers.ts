@@ -3,22 +3,22 @@ import { z } from 'zod';
 import { logger } from '../config/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { createDocument, searchDocuments, updateDocument } from '../services/vtex/masterdata.js';
-import { convertDate } from './legacy/masterdata.js';
+import { convertDate } from './checkout/masterdata.js';
 
 /**
  * Rotas de cliente que NAO sao porte do app VTEX IO.
  *
- * A `setInfo/:email/:birthDate` do legado so consegue atualizar: quando o
+ * A `setInfo/:email/:birthDate` so consegue atualizar: quando o
  * e-mail nao tem documento CL ela responde `updated: false` e a data se perde.
  * Isso acontece justamente com quem esta comprando pela primeira vez.
  * A rota daqui fecha esse buraco fazendo o upsert.
  *
- * O legado nao foi alterado de proposito — ele e copia fiel do `service.json`
- * do app original e a paridade e o que sustenta o plano de migracao.
+ * A `setInfo` nao foi alterada de proposito: a paridade dela com o contrato
+ * que o front ja consome e o que sustenta o plano de migracao.
  */
 export const customersRouter: Router = Router();
 
-/** `dd-MM-yyyy`, o mesmo formato que a `setInfo` do legado ja recebe. */
+/** `dd-MM-yyyy`, o mesmo formato que a `setInfo` ja recebe. */
 const birthDateBody = z.object({
   email: z.string().min(1),
   birthDate: z.string().regex(/^\d{2}-\d{2}-\d{4}$/, 'birthDate deve estar em dd-MM-yyyy'),
@@ -56,6 +56,12 @@ customersRouter.post(
       // O `email` vai junto porque a CL exige o campo obrigatorio mesmo em
       // atualizacao parcial — senao a VTEX devolve 400 "Required field".
       await updateDocument('CL', id, { email, birthDate: isoBirthDate });
+
+      logger.info(
+        { email, id, birthDate: isoBirthDate, operation: 'update' },
+        'Cliente CL ATUALIZADO: data de nascimento gravada',
+      );
+
       res.status(200).json({ updated: true, created: false, id });
       return;
     }
@@ -76,7 +82,10 @@ customersRouter.post(
 
     const createdId = created.Id ?? created.DocumentId ?? null;
 
-    logger.info({ email, createdId }, 'Documento CL criado para gravar a data de nascimento');
+    logger.info(
+      { email, id: createdId, birthDate: isoBirthDate, operation: 'create', firstName, lastName },
+      'Cliente CL CRIADO: nao havia cadastro para este e-mail',
+    );
 
     res.status(200).json({ updated: true, created: true, id: createdId });
   }),

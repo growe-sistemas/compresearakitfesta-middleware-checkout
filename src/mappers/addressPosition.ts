@@ -7,7 +7,7 @@ function digits(value: unknown): string {
 
 /**
  * Posicao (1-based) do endereco que casa com CEP + numero informados no
- * checkout. Nao achando, devolve o proximo indice livre — porte fiel de
+ * checkout. Nao achando, devolve o proximo indice livre — mesmo comportamento de
  * `middlewares/getAddressPosition.ts`.
  *
  * A lista de enderecos ja vem ordenada por `createdIn ASC` do Master Data.

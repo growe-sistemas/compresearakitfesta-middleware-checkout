@@ -1,9 +1,9 @@
 # Contratos da API v2
 
 Desenho das **requisições melhoradas** que este middleware vai expor no lugar do
-porte fiel do app VTEX IO. Cada rota aqui nasceu de uma regra de negócio real
+contrato herdado do app VTEX IO. Cada rota aqui nasceu de uma regra de negócio real
 descrita em [01](01-regras-de-negocio-checkout.md) e de um problema concreto
-listado em [03](03-diagnostico-legado.md).
+listado em [03](03-diagnostico-app-vtex-io.md).
 
 Status por rota:
 
@@ -12,14 +12,14 @@ Status por rota:
 | [`POST /v2/documents/cnpj/verify`](#26-post-v2documentscnpjverify--implementado) | ✅ **implementado e testado** |
 | todas as demais | proposta |
 
-As 16 rotas legadas seguem no ar sob `/middleware/checkout/` — v1 e v2 convivem
+As 16 rotas de `/middleware/checkout/` seguem no ar — v1 e v2 convivem
 (ver [plano de migração](05-plano-de-migracao.md)).
 
 ---
 
 ## 1. Convenções
 
-Regras que valem para **todas** as rotas. É o que faltava no legado.
+Regras que valem para **todas** as rotas. É o que faltava nas rotas herdadas.
 
 ### 1.1 Prefixo e nomes
 
@@ -78,7 +78,7 @@ Erro — o formato que o `errorHandler` já produz hoje:
 | upstream fora / lento | `502` / `504` |
 
 **Nunca** `200` com `{ error: true }`, e nunca `403` para reprovação de negócio —
-os dois vícios do legado.
+os dois vícios herdados do app VTEX IO.
 
 ### 1.5 Normalização de dados
 
@@ -90,7 +90,7 @@ os dois vícios do legado.
 | Telefone | E.164 (`+5511999999999`) |
 | Booleano de negócio | `true`/`false`, nunca `0`/`1`/`"S"` |
 
-Os formatos legados (`dd/mm/yyyy` no `custom_birth_date`, `0`/`1` no
+Os formatos herdados (`dd/mm/yyyy` no `custom_birth_date`, `0`/`1` no
 `custom_cnpj_data`) continuam existindo — mas **como saída pronta**, montada
 pelo middleware, não como formato de transporte.
 
@@ -187,7 +187,7 @@ A conversão para `1990-05-20T00:00:00+00:00` e o reenvio obrigatório do campo
 
 > ✅ **Já existe uma ponte para isso.** `POST|PUT /middleware/checkout/setInfo`
 > aceita exatamente `{ email, birthDate }` no corpo, com a mesma resposta da
-> rota antiga por path. Foi feita no path legado de propósito: o front troca só
+> rota antiga por path. Foi feita no path de `/middleware/checkout/` de propósito: o front troca só
 > o `fetch`, sem esperar o resto da v2. Diferenças para o contrato acima:
 > `birthDate` aceita `dd-MM-yyyy` **ou** ISO (a v2 padroniza em ISO), e a
 > resposta é `{ updated, id }` / `{ updated: false, reason }` em vez do envelope
@@ -413,7 +413,7 @@ empresa sem inscrição estadual, não falha.
 Medido com 3 requisições simultâneas e cache frio: **4** chamadas a upstream no
 total (uma por fonte), não 12.
 
-#### Diferenças em relação ao legado
+#### Diferenças em relação ao comportamento anterior
 
 Decisões tomadas com o time em 05/09/2026 — **corrigir os valores** e **ligar o
 plugin ST**:
@@ -510,7 +510,7 @@ Mantida como está (não tem dado pessoal, é cacheável, é XML).
 
 ## 3. De/para v1 → v2
 
-| Rota legada | v2 | Mudança principal |
+| Rota atual | v2 | Mudança principal |
 | --- | --- | --- |
 | `getAddresState/` | `POST /v2/customers/addresses/lookup` | fundida com a de posição; endereços normalizados |
 | `getAddressPosition/` | idem (campo `match`) | −1 round-trip |
