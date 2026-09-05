@@ -1,7 +1,7 @@
 # Diagnóstico do app VTEX IO
 
 O que está inconsistente, quebrado ou perigoso na dupla
-`checkout-ui` + app VTEX IO — e o que já foi resolvido neste repositório. Cada item vira um requisito da v2.
+`checkout-ui` + app VTEX IO — e o que já foi resolvido neste repositório. Cada item vira um requisito do contrato novo.
 
 ---
 
@@ -15,7 +15,7 @@ condição e campos. O checkout usa isso para checar CPF duplicado
 e recebe de volta **o e-mail e o nome de outro cliente**. Qualquer pessoa com
 `curl` faz o mesmo enumerando CPFs.
 
-> **Requisito v2:** o front nunca recebe dado de terceiro. A rota devolve
+> **Requisito:** o front nunca recebe dado de terceiro. A rota devolve
 > `{ available: false }` — a decisão, não os dados.
 
 ### A2. Escrita genérica no Master Data
@@ -23,7 +23,7 @@ e recebe de volta **o e-mail e o nome de outro cliente**. Qualquer pessoa com
 `md/update` aceita `acronym` + `payload` livres: escreve **qualquer campo de
 qualquer entidade** da conta. No VTEX IO era `public: true`.
 
-> **Requisito v2:** allowlist de entidades e campos, ou rotas específicas por
+> **Requisito:** allowlist de entidades e campos, ou rotas específicas por
 > caso de uso.
 
 ### A3. Dado pessoal em path de URL
@@ -32,7 +32,7 @@ qualquer entidade** da conta. No VTEX IO era `public: true`.
 nascimento) na URL — que vai para log de proxy, log de acesso, histórico do
 navegador e Referer.
 
-> **Requisito v2:** CPF e data no **corpo** da requisição, sempre POST.
+> **Requisito:** CPF e data no **corpo** da requisição, sempre POST.
 
 ### A4. `GET` que escreve — ✅ resolvido
 
@@ -50,7 +50,7 @@ data de nascimento iam na URL (mesmo problema de A3).
 As quatro rotas Sintegra são públicas e cada chamada consome **cota paga por
 consulta**. Um terceiro pode queimar a cota do cliente.
 
-> **Requisito v2:** cache server-side + rate limit por IP/sessão.
+> **Requisito:** cache server-side + rate limit por IP/sessão.
 
 ### A6. Navegador escrevendo no Master Data
 
@@ -58,7 +58,7 @@ O front grava a entidade `CB` (cache Sintegra) e `GF` (uso de vale-presente)
 direto via `/api/dataentities`. Cache e controle de uso de vale são regra de
 retaguarda; no navegador são adulteráveis.
 
-> **Requisito v2:** cache e baixa de vale-presente ficam **dentro** do
+> **Requisito:** cache e baixa de vale-presente ficam **dentro** do
 > middleware.
 
 ### A7. Credenciais hardcoded (já corrigido)
@@ -120,7 +120,7 @@ Nomes também não seguem padrão: `getAddresState` (typo), `getDataRamdom`
 (typo), `getInfo`/`setInfo` (nome não diz o que é), `md/update`
 (`snake`/`path` misturado), `getGiftCardInfoFromMD` (expõe a fonte no nome).
 
-> **Requisito v2:** um envelope só, um formato de erro só, nomes de recurso.
+> **Requisito:** um envelope só, um formato de erro só, nomes de recurso.
 
 ---
 
@@ -134,7 +134,7 @@ Nomes também não seguem padrão: `getAddresState` (typo), `getDataRamdom`
 | `_controlPfUniqueCEP` roda em todo `hashchange` para `#/shipping` | reconsulta a lista de endereços a cada navegação |
 | Sem cache HTTP útil: `Cache-Control: public, max-age=120` em rota **POST** (não é cacheável) | o header não faz nada |
 
-> **Requisito v2:** uma requisição por decisão de negócio. Consolidação e cache
+> **Requisito:** uma requisição por decisão de negócio. Consolidação e cache
 > no servidor.
 
 ---
@@ -151,7 +151,7 @@ Nomes também não seguem padrão: `getAddresState` (typo), `getDataRamdom`
   (`PF.checkMultipleAddresses`, `addressPF.checkMultAddress`,
   `_controlPfUniqueCEP`), duas delas mortas.
 
-> **Requisito v2:** regra que decide compra fica no servidor, versionada e
+> **Requisito:** regra que decide compra fica no servidor, versionada e
 > testável. Ligar/desligar vira configuração explícita, não comentário.
 
 ---
@@ -170,4 +170,4 @@ Vale registrar para não refazer:
 - rotas que dependem de integração não configurada respondem
   `503 SERVICE_NOT_CONFIGURED` em vez de derrubar o processo.
 
-A v2 herda tudo isso — o que falta é **o desenho das rotas**.
+As rotas novas herdam tudo isso — o que falta é **o desenho das rotas**.

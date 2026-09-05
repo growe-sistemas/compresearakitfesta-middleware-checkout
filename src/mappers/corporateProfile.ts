@@ -180,3 +180,44 @@ export function buildReceiverName(profile: CorporateClientProfileData): string |
   );
   return parts.length === 0 ? null : parts.join(' ');
 }
+
+/**
+ * `clientProfileData` de volta para pessoa fisica.
+ *
+ * Usado quando o cliente desiste do CNPJ. Zera os campos corporativos e
+ * preserva os de PF — e o que `_handleDiscardCNPJ` faz
+ * (`checkout-ui/.../controller.js:1063`), so que sem depender de o orderForm
+ * ja estar carregado no navegador.
+ */
+export function buildPersonalProfileReset(
+  currentProfile: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const email = text(currentProfile?.['email']);
+  if (email === null) {
+    throw new AppError(
+      400,
+      'MISSING_CLIENT_EMAIL',
+      'O orderForm nao tem clientProfileData: nao ha perfil corporativo para desfazer',
+    );
+  }
+
+  return {
+    email,
+    firstName: text(currentProfile?.['firstName']),
+    lastName: text(currentProfile?.['lastName']),
+    document: text(currentProfile?.['document']),
+    documentType: 'cpf',
+    phone: text(currentProfile?.['phone']),
+
+    corporateName: null,
+    tradeName: null,
+    corporateDocument: null,
+    stateInscription: null,
+    corporatePhone: null,
+
+    isCorporate: false,
+    profileCompleteOnLoading: false,
+    profileErrorOnLoading: false,
+    customerClass: null,
+  };
+}

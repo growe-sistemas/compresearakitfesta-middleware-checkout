@@ -1,4 +1,4 @@
-# Contratos da API v2
+# Contratos das rotas
 
 Desenho das **requisições melhoradas** que este middleware vai expor no lugar do
 contrato herdado do app VTEX IO. Cada rota aqui nasceu de uma regra de negócio real
@@ -9,11 +9,11 @@ Status por rota:
 
 | Rota | Status |
 | --- | --- |
-| [`POST /v2/documents/cnpj/verify`](#26-post-v2documentscnpjverify--implementado) | ✅ **implementado e testado** |
-| [`POST /v2/checkout/corporate-profile`](#26b-post-v2checkoutcorporate-profile--implementado) | ✅ **implementado e testado** |
+| [`POST /middleware/checkout/cnpj/verify`](#26-post-middlewarecheckoutcnpjverify--implementado) | ✅ **implementado e testado** |
+| [`POST\|DELETE /middleware/checkout/corporate-data`](#26b-postdelete-middlewarecheckoutcorporate-data--implementado) | ✅ **implementado e testado** |
 | todas as demais | proposta |
 
-As 16 rotas de `/middleware/checkout/` seguem no ar — v1 e v2 convivem
+As 16 rotas de `/middleware/checkout/` seguem no ar — as duas gerações convivem
 (ver [plano de migração](05-plano-de-migracao.md)).
 
 ---
@@ -25,11 +25,11 @@ Regras que valem para **todas** as rotas. É o que faltava nas rotas herdadas.
 ### 1.1 Prefixo e nomes
 
 ```
-/v2/<recurso>/<sub-recurso>[/<ação>]
+/middleware/checkout/<recurso>/<sub-recurso>[/<ação>]
 ```
 
 Recurso no plural, em inglês, sem sigla de fonte de dado no nome
-(`getGiftCardInfoFromMD` → `/v2/gift-cards/lookup`). Verbo só quando a operação
+(`getGiftCardInfoFromMD` → `/middleware/checkout/gift-cards/lookup`). Verbo só quando a operação
 não é CRUD (`/lookup`, `/verify`).
 
 ### 1.2 Verbos
@@ -83,7 +83,7 @@ os dois vícios herdados do app VTEX IO.
 
 ### 1.5 Normalização de dados
 
-| Tipo | Formato na API v2 |
+| Tipo | Formato na API |
 | --- | --- |
 | CPF / CNPJ | **só dígitos**, entrada e saída. O middleware aceita com máscara e normaliza |
 | Data | **ISO-8601 `YYYY-MM-DD`**. Nada de `dd/mm/yyyy` nem `dd-MM-yyyy` no fio |
@@ -116,7 +116,7 @@ navegador. `meta.cache.hit` informa o consumidor sem mudar o contrato.
 
 ## 2. Rotas
 
-### 2.1 `POST /v2/customers/document-availability`
+### 2.1 `POST /middleware/checkout/customers/document-availability`
 
 Substitui o uso de `getDataInMasterData` no bloqueio de CPF duplicado —
 **sem devolver dado de terceiro**.
@@ -140,7 +140,7 @@ Substitui o uso de `getDataInMasterData` no bloqueio de CPF duplicado —
 
 ---
 
-### 2.2 `POST /v2/customers/lookup`
+### 2.2 `POST /middleware/checkout/customers/lookup`
 
 Substitui `getInfo/:email` (e tira o e-mail da URL).
 
@@ -168,7 +168,7 @@ Devolve **apenas** os campos acima. Nome, telefone e documento não saem daqui.
 
 ---
 
-### 2.3 `PUT /v2/customers/birth-date`
+### 2.3 `PUT /middleware/checkout/customers/birth-date`
 
 Substitui `setInfo/:email/:birthDate` — deixa de ser um `GET` que escreve.
 
@@ -189,14 +189,14 @@ A conversão para `1990-05-20T00:00:00+00:00` e o reenvio obrigatório do campo
 > ✅ **Já existe uma ponte para isso.** `POST|PUT /middleware/checkout/setInfo`
 > aceita exatamente `{ email, birthDate }` no corpo, com a mesma resposta da
 > rota antiga por path. Foi feita no path de `/middleware/checkout/` de propósito: o front troca só
-> o `fetch`, sem esperar o resto da v2. Diferenças para o contrato acima:
-> `birthDate` aceita `dd-MM-yyyy` **ou** ISO (a v2 padroniza em ISO), e a
+> o `fetch`, sem esperar o resto do contrato novo. Diferenças para o contrato acima:
+> `birthDate` aceita `dd-MM-yyyy` **ou** ISO (o contrato novo padroniza em ISO), e a
 > resposta é `{ updated, id }` / `{ updated: false, reason }` em vez do envelope
 > `{ data }`.
 
 ---
 
-### 2.4 `POST /v2/customers/addresses/lookup`
+### 2.4 `POST /middleware/checkout/customers/addresses/lookup`
 
 **Funde `getAddresState` + `getAddressPosition` em uma requisição.** Hoje são
 duas chamadas que leem os mesmos dois documentos (CL e AD).
@@ -253,7 +253,7 @@ duas chamadas que leem os mesmos dois documentos (CL e AD).
 
 ---
 
-### 2.5 `POST /v2/documents/cpf/verify`
+### 2.5 `POST /middleware/checkout/documents/cpf/verify`
 
 Substitui `getDataSintegraCPF/:cpf/:date`. Tira CPF e data de nascimento da URL,
 faz o cache no servidor e **devolve a decisão** em vez do payload cru da
@@ -300,14 +300,14 @@ regular, sem ano de óbito) passam para cá.
 
 ---
 
-### 2.6 `POST /v2/documents/cnpj/verify` — ✅ IMPLEMENTADO
+### 2.6 `POST /middleware/checkout/cnpj/verify` — ✅ IMPLEMENTADO
 
 **A maior mudança.** Substitui as quatro requisições de hoje
 (`getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` +
 `publica.cnpj.ws` chamada do navegador) por **uma**, com a consolidação, os
 fallbacks de máscara `*` e o `custom_cnpj_data` já montados no servidor.
 
-Código: [`src/routes/v2/documents.ts`](../src/routes/v2/documents.ts) (HTTP),
+Código: [`src/routes/checkout/cnpj.ts`](../src/routes/checkout/cnpj.ts) (HTTP),
 [`src/services/documents/cnpjSources.ts`](../src/services/documents/cnpjSources.ts)
 (coleta, cache e dedupe) e [`src/mappers/cnpj.ts`](../src/mappers/cnpj.ts)
 (consolidação — função pura).
@@ -430,14 +430,14 @@ plugin ST**:
 | `street` vindo da PUBLICA | perdia o tipo (`"PDE ANTONIO…"`) | `"AVENIDA PDE ANTONIO…"` | a PUBLICA separa tipo e nome |
 | `ID_CONTRIBUINTE_ICMS` | fixo `null` | **segue fixo `null`** | fora do escopo aprovado; o dado agora existe em `company.icmsTaxpayer` |
 
-### 2.6b `POST /v2/checkout/corporate-profile` — ✅ IMPLEMENTADO
+### 2.6b `POST|DELETE /middleware/checkout/corporate-data` — ✅ IMPLEMENTADO
 
 Faz o que a 2.6 faz **e grava no orderForm**. É o
 `_handleCNPJSearchBtnClickEv` (`checkout-ui/.../controller.js:1512`) inteiro,
 do lado do servidor: hoje o front dispara 4 consultas de CNPJ, consolida no
 navegador e depois faz 4 escritas no orderForm. Aqui é **uma requisição**.
 
-Código: [`src/routes/v2/checkout.ts`](../src/routes/v2/checkout.ts) e
+Código: [`src/routes/checkout/corporateData.ts`](../src/routes/checkout/corporateData.ts) e
 [`src/mappers/corporateProfile.ts`](../src/mappers/corporateProfile.ts).
 
 ```jsonc
@@ -454,13 +454,15 @@ Código: [`src/routes/v2/checkout.ts`](../src/routes/v2/checkout.ts) e
 }
 ```
 
+Resposta em objeto **plano**, como todas as rotas deste serviço.
+
 ```jsonc
 // response 200 — aplicado
 {
-  "data": {
-    "applied": true,
-    "verification": { /* idêntico ao da 2.6 */ },
-    "written": {
+  "applied": true,
+  "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+  "verification": { /* idêntico ao da 2.6 */ },
+  "written": {
       "clientProfileData": {
         "email": "cliente@dominio.com",
         "firstName": "Gustavo", "lastName": "Borges",
@@ -485,21 +487,39 @@ Código: [`src/routes/v2/checkout.ts`](../src/routes/v2/checkout.ts) e
         "city": "São Paulo", "state": "SP",
         "receiverName": "Gustavo Borges"
       },
-      "customData": { "field": "custom_cnpj_data", "value": "{…}", "confirmed": true }
-    }
+    "customData": { "field": "custom_cnpj_data", "value": "{…}", "confirmed": true }
   },
-  "meta": {
-    "cache": { "hit": false },
-    "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
-    "durationMs": 3123
-  }
+  "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
+  "cache": { "hit": false },
+  "durationMs": 3123
 }
 ```
 
 ```jsonc
 // response 200 — CNPJ reprovado: NADA é gravado
-{ "data": { "applied": false, "verification": { "approved": false, "reason": "…", "message": "…" } }, "meta": { … } }
+{ "applied": false, "orderFormId": "…", "verification": { "approved": false, "reason": "…", "message": "…" }, "sources": { … }, "cache": { … } }
 ```
+
+#### `DELETE` — desistir do CNPJ
+
+```jsonc
+// request
+{ "orderFormId": "cc551425e8a445878344b79b79c48f6d" }
+
+// response 200
+{ "discarded": true, "orderFormId": "…", "written": { "clientProfileData": { "isCorporate": false, … } }, "durationMs": 1383 }
+```
+
+Desfaz as três escritas, na ordem inversa: apaga o `custom_cnpj_data`, devolve
+o `clientProfileData` para pessoa física (preservando e-mail, nome, CPF e
+telefone do comprador) e zera o `shippingData`. É o `_handleDiscardCNPJ`
+(`controller.js:1063`), sem o `window.location.reload()`.
+
+> ⚠️ **Limitação da VTEX:** depois do `DELETE`, `address` fica `null` e
+> `selectedAddresses` vazio — o endereço da empresa deixa de ser o de entrega.
+> Mas ele **sobrevive em `availableAddresses`** como endereço *disposable*.
+> Testado: a VTEX ignora tanto `availableAddresses: null` quanto `[]` no
+> attachment. O front tem o mesmo resíduo.
 
 #### As quatro escritas, em ordem
 
@@ -542,7 +562,7 @@ dois nomes diferem. Decisão do time do ERP.
 
 ---
 
-### 2.7 `POST /v2/gift-cards/lookup`
+### 2.7 `POST /middleware/checkout/gift-cards/lookup`
 
 Substitui `getGiftCardInfoFromMD`.
 
@@ -565,7 +585,7 @@ passa a vir pronto — é ele que vai para `custom_giftcard_prefix` e para o
 
 ---
 
-### 2.8 `POST /v2/gift-cards/redemptions`
+### 2.8 `POST /middleware/checkout/gift-cards/redemptions`
 
 Substitui a escrita direta do navegador na entidade `GF`.
 
@@ -578,7 +598,7 @@ Substitui a escrita direta do navegador na entidade `GF`.
 
 ---
 
-### 2.9 `POST /v2/gift-cards` — 🔑 `x-api-key`
+### 2.9 `POST /middleware/checkout/gift-cards` — 🔑 `x-api-key`
 
 Emissão em lote (hoje `createGiftCard`, consumida pela tela de admin).
 Contrato mantido, envelope novo:
@@ -593,7 +613,7 @@ Contrato mantido, envelope novo:
 
 ---
 
-### 2.10 `POST /v2/employees/lookup`
+### 2.10 `POST /middleware/checkout/employees/lookup`
 
 Substitui `getEmployee/:cpf` — tira o CPF da URL e o `error: true` com HTTP 200.
 
@@ -615,29 +635,29 @@ Falha de autenticação na Seara deixa de ser `200 { error: true }` e vira
 
 ---
 
-### 2.11 `GET /v2/sitemap/:type?`
+### 2.11 `GET /middleware/checkout/sitemap/:type?`
 
 Mantida como está (não tem dado pessoal, é cacheável, é XML).
 
 ---
 
-## 3. De/para v1 → v2
+## 3. De/para: rota herdada → rota nova
 
-| Rota atual | v2 | Mudança principal |
+| Rota herdada | Rota nova | Mudança principal |
 | --- | --- | --- |
-| `getAddresState/` | `POST /v2/customers/addresses/lookup` | fundida com a de posição; endereços normalizados |
+| `getAddresState/` | `POST /middleware/checkout/customers/addresses/lookup` | fundida com a de posição; endereços normalizados |
 | `getAddressPosition/` | idem (campo `match`) | −1 round-trip |
-| `getInfo/:email` | `POST /v2/customers/lookup` | e-mail sai da URL |
-| `setInfo/:email/:birthDate` | `PUT /v2/customers/birth-date` | deixa de ser `GET` que escreve; data em ISO |
-| `getDataInMasterData` | `POST /v2/customers/document-availability` | para de vazar dado de terceiro |
+| `getInfo/:email` | `POST /middleware/checkout/customers/lookup` | e-mail sai da URL |
+| `setInfo/:email/:birthDate` | `PUT /middleware/checkout/customers/birth-date` | deixa de ser `GET` que escreve; data em ISO |
+| `getDataInMasterData` | `POST /middleware/checkout/customers/document-availability` | para de vazar dado de terceiro |
 | `md/update` | *(sem equivalente genérico)* | cada escrita vira rota própria |
-| `getDataSintegraCPF/:cpf/:date` | `POST /v2/documents/cpf/verify` | PII fora da URL, cache no servidor, decisão pronta |
-| `getDataSintegraRF/SN/ST/:cnpj` | `POST /v2/documents/cnpj/verify` | 4 requisições → 1; consolidação no servidor |
-| `getGiftCardInfoFromMD/` | `POST /v2/gift-cards/lookup` | envelope + `prefix` pronto |
-| *(escrita direta na GF)* | `POST /v2/gift-cards/redemptions` | sai do navegador |
-| `createGiftCard/` | `POST /v2/gift-cards` | envelope |
-| `getEmployee/:cpf` | `POST /v2/employees/lookup` | CPF fora da URL; erro com status real |
-| `sitemap/:type?` | `GET /v2/sitemap/:type?` | — |
+| `getDataSintegraCPF/:cpf/:date` | `POST /middleware/checkout/documents/cpf/verify` | PII fora da URL, cache no servidor, decisão pronta |
+| `getDataSintegraRF/SN/ST/:cnpj` | `POST /middleware/checkout/cnpj/verify` | 4 requisições → 1; consolidação no servidor |
+| `getGiftCardInfoFromMD/` | `POST /middleware/checkout/gift-cards/lookup` | envelope + `prefix` pronto |
+| *(escrita direta na GF)* | `POST /middleware/checkout/gift-cards/redemptions` | sai do navegador |
+| `createGiftCard/` | `POST /middleware/checkout/gift-cards` | envelope |
+| `getEmployee/:cpf` | `POST /middleware/checkout/employees/lookup` | CPF fora da URL; erro com status real |
+| `sitemap/:type?` | `GET /middleware/checkout/sitemap/:type?` | — |
 | `make-cluster-alive`, `getDataRamdom/` | `GET /health` | keep-alive de worker VTEX IO não existe no Render |
 
 ---

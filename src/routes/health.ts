@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { DEPLOY_INFO } from '../config/build.js';
 
 export const healthRouter: Router = Router();
 
@@ -11,5 +12,8 @@ healthRouter.get('/health', (_req, res) => {
     status: 'ok',
     uptimeSeconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
+    // Aditivo: `status` continua sendo o unico campo que o Render olha.
+    // O resto alimenta a pagina de status em `/`.
+    ...DEPLOY_INFO,
   });
 });

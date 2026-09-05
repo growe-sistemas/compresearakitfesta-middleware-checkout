@@ -11,13 +11,13 @@ compartilhado e devolve os dados normalizados.
 
 > **Status:** base pronta (config, clients, auth, erros, health, deploy) e as
 > **16 rotas sob `/middleware/checkout/*`**, com a lógica que o app VTEX IO
-> `kitfesta-seara/node` tinha, mais as rotas novas da v2.
+> `kitfesta-seara/node` tinha, mais as rotas novas do contrato novo.
 > As rotas do orderForm ainda não existem — o de/para sai do payload real da
 > requisição. Ver [Endpoints](#endpoints) e [Mapeamento](#mapeamento-depara).
 
 📚 **[`docs/`](docs/README.md)** — regra de negócio do checkout, mapa das
 chamadas do front, diagnóstico do app VTEX IO e os
-[contratos da API v2](docs/04-contratos-v2.md) (proposta das requisições novas).
+[contratos das rotas](docs/04-contratos-api.md) (proposta das requisições novas).
 
 ---
 
@@ -159,19 +159,18 @@ nunca é logado. Sem `API_KEY` definida no ambiente, essa rota responde
 Responde sobre **este processo**, sem tocar na VTEX — assim uma instabilidade
 da VTEX não faz o Render derrubar o serviço.
 
-### API v2 — rotas novas
+### Rotas novas
 
 Contrato consistente (envelope `{ data, meta }`, erro único, dado pessoal fora
 da URL, decisão pronta em vez de dado bruto). Detalhes em
-[`docs/04-contratos-v2.md`](docs/04-contratos-v2.md).
+[`docs/04-contratos-api.md`](docs/04-contratos-api.md).
 
 | Rota | Método | Auth | Substitui |
 | --- | --- | --- | --- |
-| `/v2/documents/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
-| `/v2/checkout/corporate-profile` | POST | pública | o `_handleCNPJSearchBtnClickEv` inteiro: as 4 consultas de CNPJ **e** as 4 escritas no orderForm |
+| `/middleware/checkout/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
 
 ```bash
-curl -X POST http://localhost:3000/v2/checkout/corporate-profile -H 'Content-Type: application/json' -d '{"orderFormId":"cc551425e8a445878344b79b79c48f6d","cnpj":"50.972.373/0001-00","personal":{"email":"cliente@dominio.com","firstName":"Gustavo","lastName":"Borges"}}'
+curl -X POST http://localhost:3000/middleware/checkout/corporate-data -H 'Content-Type: application/json' -d '{"orderFormId":"cc551425e8a445878344b79b79c48f6d","cnpj":"50.972.373/0001-00","personal":{"email":"cliente@dominio.com","firstName":"Gustavo","lastName":"Borges"}}'
 ```
 
 Busca o CNPJ e popula o orderForm: `clientProfileData` corporativo (preservando
@@ -187,6 +186,7 @@ de parâmetros de URL:
 | --- | --- | --- | --- |
 | `/middleware/checkout/setInfo` | POST, PUT | pública | `/middleware/checkout/setInfo/:email/:birthDate` |
 | `/middleware/checkout/custom-data/birth-date` | POST | pública | o `PUT` de `customData` que o `checkout-ui` fazia direto na VTEX |
+| `/middleware/checkout/corporate-data` | POST, DELETE | pública | o `_handleCNPJSearchBtnClickEv` e o `_handleDiscardCNPJ` inteiros |
 
 ```bash
 curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type: application/json' -d '{"email":"cliente@dominio.com","birthDate":"24-11-1995"}'
@@ -211,7 +211,7 @@ divergência vira `502 CUSTOM_DATA_NOT_PERSISTED` em vez de um "gravado" falso.
 Detalhes e os outros campos em [`docs/07-customdata.md`](docs/07-customdata.md).
 
 ```bash
-curl -X POST http://localhost:3000/v2/documents/cnpj/verify -H 'Content-Type: application/json' -d '{"cnpj":"50.972.373/0001-00","fallbackEmail":"cliente@dominio.com"}'
+curl -X POST http://localhost:3000/middleware/checkout/cnpj/verify -H 'Content-Type: application/json' -d '{"cnpj":"50.972.373/0001-00","fallbackEmail":"cliente@dominio.com"}'
 ```
 
 Uma requisição no lugar de quatro, com as quatro fontes consultadas em paralelo
@@ -223,7 +223,7 @@ saiu; `missingFiscalFields` diz exatamente o que faltou quando reprova.
 > ⚠️ Ao ligar no `checkout-ui`, três campos mudam de valor no ERP
 > (`ID_MICRO_EMPRESA`, `ID_MEI`, `NATUREZA_JURIDICA`) e `ID_INSCRICAO_ESTADUAL`
 > passa a chegar sempre. Tabela completa em
-> [`docs/04`, seção 2.6](docs/04-contratos-v2.md#26-post-v2documentscnpjverify--implementado).
+> [`docs/04`, seção 2.6](docs/04-contratos-api.md#26-post-v2documentscnpjverify--implementado).
 
 ### Rotas sob `/middleware/checkout/*`
 
@@ -470,7 +470,7 @@ commits na `main` disparam deploy automático (`autoDeploy: true`).
 src/
 ├─ config/        env (zod, fail-fast) e logger (pino, com redaction)
 ├─ middleware/    auth por x-api-key, errorHandler, request-id + log HTTP
-├─ routes/        health, checkout/ (/middleware/checkout/*) e v2/ (contrato novo)
+├─ routes/        health e checkout/ — tudo sob /middleware/checkout/*
 ├─ services/
 │  ├─ http/       núcleo HTTP: timeout, retry com backoff, parse por schema
 │  ├─ vtex/       cliente VTEX + masterdata, catalog, giftcard

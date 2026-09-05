@@ -32,7 +32,7 @@ Quem alimenta o valor de cada uma:
 | Requisição | De onde vem o valor | Chamada ao middleware |
 | --- | --- | --- |
 | 1 | input `#client-birthDate` (ou `customData`, ou a entidade CL) | `getInfo/:email` para pré-preencher; `setInfo` para espelhar na CL |
-| 2 e 3 | consolidação das fontes de CNPJ | **`POST /v2/documents/cnpj/verify`** → `data.erpCustomData` |
+| 2 e 3 | consolidação das fontes de CNPJ | **`POST /middleware/checkout/cnpj/verify`** → `data.erpCustomData` |
 | 4 | posição do endereço na lista do cliente | `getAddressPosition` |
 | 5 | `logisticsInfo[0].slas[0].deliveryWindow.endDateUtc` do próprio orderForm | nenhuma |
 
@@ -88,15 +88,18 @@ Duas coisas a saber:
 
 ### O `custom_cnpj_data` também já é gravado pelo servidor
 
-`POST /v2/checkout/corporate-profile` ✅ faz a requisição 2 da tabela — e mais:
+`POST /middleware/checkout/corporate-data` ✅ faz a requisição 2 da tabela — e mais:
 grava o `clientProfileData` corporativo e o endereço da Junta Comercial na mesma
 chamada. Contrato completo em
-[04, seção 2.6b](04-contratos-v2.md#26b-post-v2checkoutcorporate-profile--implementado).
+[04, seção 2.6b](04-contratos-api.md#26b-postdelete-middlewarecheckoutcorporate-data--implementado).
+
+O `DELETE` do `custom_cnpj_data` (requisição 3) também está lá, no mesmo path
+com verbo `DELETE`: tudo que é CNPJ entra e sai por um recurso só.
 
 Faltam dois: `current_address_id` e `custom_delivery_date`, que seguem saindo do
 navegador. A camada de serviço já é genérica (`putCustomData` /
 `deleteCustomData` em `services/vtex/checkout.ts`), então cada um é só uma rota
-nova. O `DELETE` do `custom_cnpj_data` (requisição 3) também ainda não tem rota.
+nova.
 
 ---
 
@@ -272,11 +275,11 @@ O que ele já faz é entregar conteúdo pronto para um dos campos:
 
 | Campo | Middleware entrega | Rota |
 | --- | --- | --- |
-| `custom_cnpj_data` | `data.erpCustomData`, os 11 campos montados e validados | `POST /v2/documents/cnpj/verify` ✅ |
-| `current_address_id` | a posição do endereço | `getAddressPosition` (v1) / `POST /v2/customers/addresses/lookup` (proposto) |
+| `custom_cnpj_data` | `data.erpCustomData`, os 11 campos montados e validados | `POST /middleware/checkout/cnpj/verify` ✅ |
+| `current_address_id` | a posição do endereço | `getAddressPosition` / `POST /middleware/checkout/customers/addresses/lookup` (proposto) |
 | `custom_birth_date` | — | a data vem do próprio cliente |
 | `custom_delivery_date` | — | vem do SLA do orderForm |
-| `custom_giftcard_prefix` | o prefixo já calculado | `POST /v2/gift-cards/lookup` (proposto) |
+| `custom_giftcard_prefix` | o prefixo já calculado | `POST /middleware/checkout/gift-cards/lookup` (proposto) |
 
 **Manter assim é a escolha certa.** Escrever `customData` exige a sessão do
 comprador (cookie do orderForm), que é do navegador — mover isso para o servidor

@@ -73,6 +73,14 @@ const envSchema = z.object({
    */
   PUBLICA_CNPJ_BASE_URL: z.string().url().default('https://publica.cnpj.ws/cnpj'),
 
+  /**
+   * Injetadas pelo Render. Nao existem em desenvolvimento — servem so para a
+   * pagina de status dizer qual commit esta no ar.
+   */
+  RENDER_SERVICE_NAME: z.string().optional(),
+  RENDER_GIT_COMMIT: z.string().optional(),
+  RENDER_GIT_BRANCH: z.string().optional(),
+
   // Opcionais com default
   CORS_ORIGINS: z.string().default('*'),
   VTEX_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),

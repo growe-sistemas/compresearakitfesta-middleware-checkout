@@ -1,5 +1,7 @@
 import express, { Router, type RequestHandler } from 'express';
 import { requireApiKey } from '../../middleware/auth.js';
+import { verifyCnpjRoute } from './cnpj.js';
+import { discardCorporateData, setCorporateData } from './corporateData.js';
 import { setBirthDateCustomData } from './customData.js';
 import { getEmployee } from './employee.js';
 import { createGiftCard, getGiftCardInfoFromMD } from './giftCard.js';
@@ -100,3 +102,19 @@ checkoutRouter.post(
   parseBody,
   setBirthDateCustomData,
 );
+
+/**
+ * Consulta de CNPJ nas quatro fontes, consolidada e ja decidida — sem tocar no
+ * orderForm. Use quando so se quer conferir o CNPJ; para conferir E gravar,
+ * `corporate-data` faz as duas coisas em uma chamada.
+ */
+checkoutRouter.post('/middleware/checkout/cnpj/verify', parseBody, verifyCnpjRoute);
+
+/**
+ * Fluxo PJ completo: consulta o CNPJ nas quatro fontes e popula o orderForm
+ * (perfil corporativo, endereco da Junta Comercial e o payload fiscal do ERP).
+ * Substitui o `_handleCNPJSearchBtnClickEv` do `checkout-ui`.
+ */
+checkoutRouter.post('/middleware/checkout/corporate-data', parseBody, setCorporateData);
+// Desistir do CNPJ: mesmo recurso, verbo inverso.
+checkoutRouter.delete('/middleware/checkout/corporate-data', parseBody, discardCorporateData);

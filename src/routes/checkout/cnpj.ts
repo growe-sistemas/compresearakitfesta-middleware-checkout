@@ -3,17 +3,16 @@ import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { logger } from '../../config/logger.js';
 import { isValidCnpj, verifyCnpj } from '../../mappers/cnpj.js';
 import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
-import type { ApiResponse, CnpjVerification, CnpjVerificationMeta } from '../../types/api.js';
 
 /**
- * POST /v2/documents/cnpj/verify
+ * POST /middleware/checkout/cnpj/verify
  *
  * Uma requisicao no lugar das quatro que o checkout dispara hoje
  * (`getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` +
  * `publica.cnpj.ws` chamada do navegador), com a consolidacao, a validacao e o
  * payload do ERP prontos.
  *
- * O contrato esta em `docs/04-contratos-v2.md`; o porque de cada regra, em
+ * O contrato esta em `docs/04-contratos-api.md`; o porque de cada regra, em
  * `docs/06-sintegra-e-orderform.md`.
  */
 const verifyCnpjBody = z.object({
@@ -55,11 +54,11 @@ export const verifyCnpjRoute = asyncHandler(async (req, res) => {
     'Verificacao de CNPJ concluida',
   );
 
-  const body: ApiResponse<CnpjVerification, CnpjVerificationMeta> = {
-    data: verification,
-    meta: { cache, sources: statuses, durationMs },
-  };
-
   // Reprovacao e resposta valida de negocio: 200, com `approved: false`.
-  res.status(200).json(body);
+  res.status(200).json({
+    ...verification,
+    sources: statuses,
+    cache,
+    durationMs,
+  });
 });

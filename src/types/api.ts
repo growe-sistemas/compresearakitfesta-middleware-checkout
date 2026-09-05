@@ -1,11 +1,12 @@
 /**
  * Contrato de saida deste middleware (o que os consumidores externos veem).
  *
- * Convencoes da v2 (ver `docs/04-contratos-v2.md`):
- * - resposta de sucesso sempre `{ data, meta? }`, com `data` objeto;
+ * Convencoes (ver `docs/04-contratos-api.md`):
+ * - resposta de sucesso e um objeto plano, sem envelope;
  * - ausencia de valor e `null` explicito, nunca chave omitida;
  * - documento so digitos, data em ISO `YYYY-MM-DD`, telefone em E.164;
- * - reprovacao de negocio e HTTP 200 com `approved: false`, nao erro HTTP.
+ * - reprovacao de negocio e HTTP 200 com `approved: false`, nao erro HTTP;
+ * - erro e sempre `{ error: { code, message, requestId, details? } }`.
  */
 export interface ErrorResponse {
   error: {
@@ -16,14 +17,8 @@ export interface ErrorResponse {
   };
 }
 
-/** Envelope de sucesso da v2. */
-export interface ApiResponse<TData, TMeta = undefined> {
-  data: TData;
-  meta?: TMeta;
-}
-
 // ---------------------------------------------------------------------------
-// POST /v2/documents/cnpj/verify
+// POST /middleware/checkout/cnpj/verify
 // ---------------------------------------------------------------------------
 
 export type CnpjVerificationReason =
@@ -114,7 +109,11 @@ export interface CnpjVerification {
   erpCustomData: CnpjErpCustomData;
 }
 
-export interface CnpjVerificationMeta {
+/**
+ * Diagnostico que acompanha a resposta das rotas de CNPJ. Vai no mesmo nivel
+ * do resultado, nao dentro de um envelope.
+ */
+export interface CnpjVerificationDiagnostics {
   cache: { hit: boolean; ageSeconds?: number };
   /** Como cada fonte se saiu — diagnostico que o fluxo antigo nao dava. */
   sources: Record<'RF' | 'SN' | 'ST' | 'PUBLICA', string>;

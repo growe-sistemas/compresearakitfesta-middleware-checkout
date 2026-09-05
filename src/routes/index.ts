@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { checkoutRouter } from './checkout/index.js';
-import { v2Router } from './v2/index.js';
 import { customersRouter } from './customers.js';
 
 /**
@@ -16,8 +15,6 @@ import { customersRouter } from './customers.js';
  */
 export const apiRouter: Router = Router();
 
-// v2 primeiro: rotas novas, contrato consistente (docs/04-contratos-v2.md).
-apiRouter.use(v2Router);
-// Rotas do checkout, sob /middleware/checkout/*.
+// Todas as rotas de negocio vivem sob /middleware/checkout/*.
 apiRouter.use(checkoutRouter);
 apiRouter.use(customersRouter);

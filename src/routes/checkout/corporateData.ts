@@ -5,12 +5,14 @@ import { isValidCnpj, verifyCnpj } from '../../mappers/cnpj.js';
 import {
   buildCorporateAddress,
   buildCorporateProfile,
+  buildPersonalProfileReset,
   buildReceiverName,
 } from '../../mappers/corporateProfile.js';
 import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
 import {
   CUSTOM_DATA_FIELDS,
   clearShippingData,
+  deleteCustomData,
   getOrderForm,
   orderFormIdSchema,
   putCustomData,
@@ -19,7 +21,7 @@ import {
 import { AppError } from '../../services/vtex/errors.js';
 
 /**
- * POST /v2/checkout/corporate-profile
+ * POST /middleware/checkout/corporate-data
  *
  * Busca o CNPJ e **popula o orderForm** com os dados de PJ: perfil
  * corporativo, endereco da Junta Comercial e o payload fiscal do ERP.
@@ -63,7 +65,7 @@ const corporateProfileBody = z.object({
     .optional(),
 });
 
-export const applyCorporateProfile = asyncHandler(async (req, res) => {
+export const setCorporateData = asyncHandler(async (req, res) => {
   const startedAt = Date.now();
   const { orderFormId, cnpj, personal } = corporateProfileBody.parse(req.body);
 
@@ -89,8 +91,12 @@ export const applyCorporateProfile = asyncHandler(async (req, res) => {
     );
 
     res.status(200).json({
-      data: { applied: false, verification },
-      meta: { cache, sources: statuses, durationMs: Date.now() - startedAt },
+      applied: false,
+      orderFormId,
+      verification,
+      sources: statuses,
+      cache,
+      durationMs: Date.now() - startedAt,
     });
     return;
   }
@@ -159,16 +165,63 @@ export const applyCorporateProfile = asyncHandler(async (req, res) => {
   );
 
   res.status(200).json({
-    data: {
-      applied: true,
-      verification,
-      /** Exatamente o que foi gravado no orderForm. */
-      written: {
-        clientProfileData: profile,
-        shippingAddress: address,
-        customData: { field, value: customDataValue, confirmed: customDataResult.confirmed },
-      },
+    applied: true,
+    orderFormId,
+    verification,
+    /** Exatamente o que foi gravado no orderForm. */
+    written: {
+      clientProfileData: profile,
+      shippingAddress: address,
+      customData: { field, value: customDataValue, confirmed: customDataResult.confirmed },
     },
-    meta: { cache, sources: statuses, durationMs },
+    sources: statuses,
+    cache,
+    durationMs,
+  });
+});
+
+const discardBody = z.object({ orderFormId: orderFormIdSchema });
+
+/**
+ * DELETE /middleware/checkout/corporate-data
+ *
+ * O inverso da rota acima: o cliente desistiu do CNPJ e volta a comprar como
+ * pessoa fisica. Desfaz as tres escritas, na ordem inversa do que o
+ * `_handleDiscardCNPJ` faz no front (`checkout-ui/.../controller.js:1063`).
+ *
+ * Fica no mesmo path de proposito: tudo que e CNPJ entra e sai por aqui.
+ */
+export const discardCorporateData = asyncHandler(async (req, res) => {
+  const startedAt = Date.now();
+  const { orderFormId } = discardBody.parse(req.body);
+
+  const orderForm = await getOrderForm(orderFormId);
+  const profile = buildPersonalProfileReset(orderForm?.clientProfileData);
+
+  const { app, field } = CUSTOM_DATA_FIELDS.cnpjData;
+
+  // 1) tira o payload fiscal
+  await deleteCustomData({ orderFormId, app, field });
+
+  // 2) devolve o perfil para PF
+  await sendAttachment({
+    orderFormId,
+    attachmentId: 'clientProfileData',
+    payload: profile,
+  });
+
+  // 3) zera o endereco da empresa — senao ele sobrevive e vira o endereco de
+  //    entrega do PF, que e exatamente o que a trava de endereco unico proibe.
+  await clearShippingData(orderFormId);
+
+  const durationMs = Date.now() - startedAt;
+
+  logger.info({ orderFormId, durationMs }, 'Perfil corporativo removido do orderForm');
+
+  res.status(200).json({
+    discarded: true,
+    orderFormId,
+    written: { clientProfileData: profile },
+    durationMs,
   });
 });

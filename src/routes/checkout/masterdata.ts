@@ -123,7 +123,7 @@ export function convertDate(dateStr: string, joinStr = '-'): string {
  *
  * Aceita os dois formatos que circulam por aqui: `dd-MM-yyyy` (o que o
  * `checkout-ui` monta hoje com o proprio `convertDate`) e ISO `yyyy-MM-dd`
- * (o formato da v2). Sao distinguiveis sem ambiguidade pelo tamanho do
+ * (o formato padrao deste servico). Sao distinguiveis sem ambiguidade pelo tamanho do
  * primeiro grupo, entao aceitar os dois nao cria armadilha.
  *
  * Devolve `null` quando a data nao existe no calendario (`31-02-1995`), coisa

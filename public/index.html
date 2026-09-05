@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Middleware Checkout — Kit Festa Seara</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f7f9;
+        --card: #ffffff;
+        --border: #e2e5ea;
+        --text: #14181f;
+        --muted: #6b7280;
+        --accent: #ff5300;
+        --ok: #12805c;
+        --ok-bg: #e7f5ef;
+        --code-bg: #f2f3f5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1116;
+          --card: #171a21;
+          --border: #262b35;
+          --text: #e6e8ec;
+          --muted: #9aa1ad;
+          --ok: #46d39a;
+          --ok-bg: #10291f;
+          --code-bg: #1e222b;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 2rem 1.25rem 4rem;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+      }
+      main { max-width: 720px; margin: 0 auto; }
+
+      header { margin-bottom: 1.75rem; }
+      h1 { font-size: 1.35rem; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 0.9rem; margin: 0; }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--ok-bg);
+        color: var(--ok);
+        border-radius: 999px;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+      .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: currentColor;
+      }
+      .status[data-state="down"] { background: #fdecec; color: #c02626; }
+      @media (prefers-color-scheme: dark) {
+        .status[data-state="down"] { background: #2b1414; color: #ff8080; }
+      }
+
+      .deploy {
+        margin: 1.1rem 0 0;
+        font-size: 1.55rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .deploy-label {
+        margin: 0;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .deploy-rel { color: var(--muted); font-size: 0.9rem; margin: 0.2rem 0 0; }
+
+      dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.55rem 1.5rem;
+        margin: 1.25rem 0 0;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border);
+        font-size: 0.9rem;
+      }
+      dt { color: var(--muted); }
+      dd { margin: 0; }
+
+      h2 {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 0.85rem;
+        font-weight: 600;
+      }
+
+      ul { list-style: none; margin: 0; padding: 0; }
+      li {
+        display: flex;
+        gap: 0.6rem;
+        align-items: baseline;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.88rem;
+      }
+      li:last-child { border-bottom: 0; }
+      .verb {
+        flex: none;
+        min-width: 3.6rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--accent);
+      }
+      code, .path {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+          monospace;
+        font-size: 0.85em;
+      }
+      .path { word-break: break-all; }
+      .note { color: var(--muted); font-size: 0.8rem; margin-left: auto; flex: none; }
+      @media (max-width: 520px) {
+        body { padding: 1.5rem 1rem 3rem; }
+        .note { display: none; }
+        dl { gap: 0.45rem 1rem; }
+        .deploy { font-size: 1.3rem; }
+      }
+
+      footer {
+        margin-top: 2rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-align: center;
+      }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Middleware Checkout</h1>
+        <p class="sub">Kit Festa Seara — ponte entre o checkout e a VTEX</p>
+      </header>
+
+      <section class="card">
+        <span class="status" id="status" data-state="loading">
+          <span class="dot"></span><span id="status-text">verificando…</span>
+        </span>
+
+        <p class="deploy-label" style="margin-top: 1.1rem">Último deploy</p>
+        <p class="deploy" id="deploy-date">—</p>
+        <p class="deploy-rel" id="deploy-rel"></p>
+
+        <dl>
+          <dt>Ambiente</dt><dd id="env">—</dd>
+          <dt>No ar há</dt><dd id="uptime">—</dd>
+          <dt>Commit</dt><dd id="commit">—</dd>
+          <dt>Branch</dt><dd id="branch">—</dd>
+          <dt>Node</dt><dd id="node">—</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Endpoints</h2>
+        <ul>
+          <li><span class="verb">GET</span><span class="path">/health</span><span class="note">status deste processo</span></li>
+          <li><span class="verb">POST</span><span class="path">/middleware/checkout/cnpj/verify</span><span class="note">consulta CNPJ</span></li>
+          <li><span class="verb">POST</span><span class="path">/middleware/checkout/corporate-data</span><span class="note">CNPJ → orderForm</span></li>
+          <li><span class="verb">DELETE</span><span class="path">/middleware/checkout/corporate-data</span><span class="note">desistir do CNPJ</span></li>
+          <li><span class="verb">POST</span><span class="path">/middleware/checkout/custom-data/birth-date</span><span class="note">data no orderForm</span></li>
+          <li><span class="verb">POST</span><span class="path">/middleware/checkout/setInfo</span><span class="note">data na entidade CL</span></li>
+          <li><span class="verb">POST</span><span class="path">/middleware/checkout/getAddresState/</span><span class="note">endereços do cliente</span></li>
+          <li><span class="verb">POST</span><span class="path">/middleware/checkout/getAddressPosition/</span><span class="note">posição do endereço</span></li>
+          <li><span class="verb">GET</span><span class="path">/middleware/checkout/getEmployee/:cpf</span><span class="note">B2E Seara</span></li>
+          <li><span class="verb">GET</span><span class="path">/middleware/checkout/sitemap/:type?</span><span class="note">sitemap XML</span></li>
+        </ul>
+      </section>
+
+      <footer>
+        Lista resumida — a documentação completa está em
+        <code>docs/</code> no repositório.
+      </footer>
+    </main>
+
+    <script src="/status.js"></script>
+  </body>
+</html>

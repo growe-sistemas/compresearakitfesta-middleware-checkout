@@ -260,10 +260,10 @@ em `customData.custom_birth_date` no formato `dd/mm/yyyy`.
 
 ---
 
-## 6. O que a v2 resolve disso — ✅ implementado
+## 6. O que a rota nova resolve disso — ✅ implementado
 
-`POST /v2/documents/cnpj/verify` (contrato completo em
-[04, seção 2.6](04-contratos-v2.md#26-post-v2documentscnpjverify--implementado))
+`POST /middleware/checkout/cnpj/verify` (contrato completo em
+[04, seção 2.6](04-contratos-api.md#26-post-v2documentscnpjverify--implementado))
 consolida as quatro fontes **no servidor** e devolve o `erpCustomData` pronto:
 
 - lê `natureza_juridica` da RF quando a PUBLICA falta → **destrava 4.1**;
@@ -297,7 +297,7 @@ Consultado direto no provedor para o CNPJ de teste:
 Dois aprendizados:
 
 1. `code: "1"` aqui **não é erro** — é a resposta correta para empresa sem
-   inscrição estadual (não contribuinte de ICMS). Por isso a v2 trata esse caso
+   inscrição estadual (não contribuinte de ICMS). Por isso o contrato novo trata esse caso
    como `ST: "not_found"` e grava `"Isento"`, em vez de reprovar a compra.
 2. O plugin ST é a **única** fonte de `contribuinte_icms` e `regime_tributacao`.
    O campo `ID_CONTRIBUINTE_ICMS` do ERP é fixo `null` desde sempre; agora o

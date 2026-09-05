@@ -1,7 +1,7 @@
 # Mapa: front → endpoint → upstream
 
 Inventário de **toda** chamada HTTP que sai do checkout, com o payload real
-observado no código. Serve de base para o de/para da v2.
+observado no código. Serve de base para o de/para do contrato novo.
 
 Prefixo no app VTEX IO: `/_v1/private/middleware/`.
 Prefixo neste repositório: `/middleware/checkout/`.
@@ -150,7 +150,7 @@ No middleware isso vira 403 (com `message`) ou 408 (sem).
 | `custom_delivery_date` | `dd/mm/yyyy` da janela de entrega | `Schedule` |
 | `custom_giftcard_prefix` | prefixo do vale (maiúsculo) | fluxo de gift card (desligado) |
 
-Essas cinco chaves são **o contrato real com o ERP**. Qualquer mudança na v2
+Essas cinco chaves são **o contrato real com o ERP**. Qualquer mudança no contrato novo
 precisa continuar produzindo exatamente esses valores.
 
 ---
