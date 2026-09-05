@@ -403,6 +403,8 @@ function buildErpCustomData(company: CnpjCompany): CnpjErpCustomData {
 }
 
 const REASON_MESSAGES: Record<CnpjVerificationReason, string> = {
+  DOCUMENT_NOT_FOUND:
+    'CNPJ não encontrado na base da Receita Federal. Confira o número informado.',
   SOURCES_UNAVAILABLE:
     'Não conseguimos consultar os dados deste CNPJ agora. Tente novamente em alguns minutos.',
   REGISTRATION_INACTIVE:
@@ -423,13 +425,28 @@ const REASON_MESSAGES: Record<CnpjVerificationReason, string> = {
 export function verifyCnpj(options: {
   cnpj: string;
   sources: CnpjSources;
+  /**
+   * Como cada fonte se saiu. E o que separa "o CNPJ nao existe" de "as fontes
+   * nao responderam" — sem isso os dois casos ficam identicos (todas as
+   * fontes com valor nulo) e o cliente recebe "tente novamente" para um
+   * numero que nunca vai existir.
+   */
+  statuses?: Record<string, SourceStatus> | undefined;
   fallbackEmail?: string | undefined;
 }): CnpjVerification {
-  const { cnpj, sources } = options;
+  const { cnpj, sources, statuses } = options;
   const fallbackEmail = options.fallbackEmail ?? null;
 
   const hasAnySource =
     sources.rf !== null || sources.sn !== null || sources.st !== null || sources.publica !== null;
+
+  // Todas as fontes responderam, e todas responderam "nao tenho esse CNPJ".
+  // Mistura com timeout/erro nao conta: nesse caso nao da para afirmar que o
+  // documento nao existe, so que nao foi possivel confirmar.
+  const allSourcesSaidNotFound =
+    statuses !== undefined &&
+    Object.values(statuses).length > 0 &&
+    Object.values(statuses).every((status) => status === 'not_found');
 
   const company = buildCompany(sources, cnpj, fallbackEmail);
   const address = buildAddress(sources);
@@ -440,7 +457,9 @@ export function verifyCnpj(options: {
   );
 
   const reason: CnpjVerificationReason | null = !hasAnySource
-    ? 'SOURCES_UNAVAILABLE'
+    ? allSourcesSaidNotFound
+      ? 'DOCUMENT_NOT_FOUND'
+      : 'SOURCES_UNAVAILABLE'
     : company.registrationStatus !== 'ativa'
       ? 'REGISTRATION_INACTIVE'
       : missingFiscalFields.length > 0

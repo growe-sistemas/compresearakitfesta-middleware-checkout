@@ -127,8 +127,11 @@ import { AppError } from '../../services/vtex/errors.js';
  *   "sources": {}, "cache": {}, "durationMs": 0
  * }
  * ```
- * Sem `written`: o orderForm nao foi tocado. Os `reason` possiveis sao os
- * mesmos de `/middleware/checkout/cnpj/verify`.
+ * Sem `written`: o orderForm nao foi tocado — nem quando o CNPJ nao existe,
+ * nem quando esta baixado. Os `reason` possiveis sao os mesmos de
+ * `/middleware/checkout/cnpj/verify`: `DOCUMENT_NOT_FOUND`,
+ * `SOURCES_UNAVAILABLE`, `REGISTRATION_INACTIVE`, `INCOMPLETE_FISCAL_DATA` e
+ * `MISSING_POSTAL_CODE`.
  *
  * ---------------------------------------------------------------------------
  * ERROS
@@ -177,7 +180,7 @@ export const setCorporateData = asyncHandler(async (req, res) => {
     personal?.email ??
     (typeof currentProfile?.['email'] === 'string' ? currentProfile['email'] : undefined);
 
-  const verification = verifyCnpj({ cnpj, sources, fallbackEmail });
+  const verification = verifyCnpj({ cnpj, sources, statuses, fallbackEmail });
 
   // 2) Reprovado: devolve o motivo SEM tocar no orderForm.
   if (!verification.approved) {

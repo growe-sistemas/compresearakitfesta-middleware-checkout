@@ -385,12 +385,18 @@ Resposta real do CNPJ de teste (50972373000100):
 
 Reprovações possíveis (`approved: false`, sempre **HTTP 200**):
 
-| `reason` | Quando |
-| --- | --- |
-| `SOURCES_UNAVAILABLE` | nenhuma fonte respondeu |
-| `REGISTRATION_INACTIVE` | situação cadastral ≠ ativa |
-| `INCOMPLETE_FISCAL_DATA` | falta algum dos 8 campos obrigatórios do `erpCustomData` |
-| `MISSING_POSTAL_CODE` | CEP ausente ou mascarado em todas as fontes |
+| `reason` | Quando | Adianta tentar de novo? |
+| --- | --- | --- |
+| `DOCUMENT_NOT_FOUND` | as quatro fontes responderam e nenhuma conhece o CNPJ | **não** |
+| `SOURCES_UNAVAILABLE` | nenhuma fonte conseguiu responder (rede, timeout) | sim |
+| `REGISTRATION_INACTIVE` | situação cadastral ≠ ativa (ex.: empresa baixada) | não |
+| `INCOMPLETE_FISCAL_DATA` | falta algum dos 8 campos obrigatórios do `erpCustomData` | talvez |
+| `MISSING_POSTAL_CODE` | CEP ausente ou mascarado em todas as fontes | não |
+
+A distinção entre os dois primeiros importa: os dois chegam com todas as fontes
+sem valor, mas só um deles tem conserto tentando de novo. Sem ela, o cliente que
+digita o CNPJ errado recebe *"tente novamente em alguns minutos"* para um número
+que nunca vai existir.
 
 `missingFiscalFields` lista **quais** campos faltaram — diagnóstico que o fluxo
 antigo não dava (a tela só dizia "tente novamente").

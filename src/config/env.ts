@@ -101,6 +101,13 @@ const envSchema = z.object({
    */
   CNPJ_CACHE_TTL_MS: z.coerce.number().int().min(0).default(24 * 60 * 60 * 1000),
   CNPJ_CACHE_MAX_ENTRIES: z.coerce.number().int().positive().default(1_000),
+
+  /**
+   * Cache das respostas NEGATIVAS (CNPJ que nenhuma fonte conhece). TTL curto
+   * de proposito: protege a cota paga contra erro de digitacao repetido sem
+   * segurar por muito tempo a resposta errada para uma empresa recem-aberta.
+   */
+  CNPJ_NEGATIVE_CACHE_TTL_MS: z.coerce.number().int().min(0).default(10 * 60 * 1000),
 });
 
 export type Env = z.infer<typeof envSchema>;

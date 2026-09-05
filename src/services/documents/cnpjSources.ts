@@ -42,6 +42,18 @@ const cache = new TtlCache<CachedSources>({
   maxEntries: env.CNPJ_CACHE_MAX_ENTRIES,
 });
 
+/**
+ * Cache separado para CNPJ que nenhuma fonte conhece.
+ *
+ * Sem ele, erro de digitacao repetido queima tres consultas pagas por
+ * tentativa. Com TTL proprio, menor: uma resposta negativa nao pode ficar
+ * presa por 24h se a empresa acabou de ser aberta.
+ */
+const negativeCache = new TtlCache<CachedSources>({
+  ttlMs: env.CNPJ_NEGATIVE_CACHE_TTL_MS,
+  maxEntries: env.CNPJ_CACHE_MAX_ENTRIES,
+});
+
 /** Coletas em andamento, para nao disparar a mesma duas vezes. */
 const inFlight = new Map<string, Promise<CachedSources>>();
 
@@ -135,7 +147,7 @@ async function collect(cnpj: string): Promise<CachedSources> {
 
 /** Coleta com cache e dedupe. `cnpj` ja deve vir so com digitos. */
 export async function fetchCnpjSources(cnpj: string): Promise<CnpjSourcesResult> {
-  const cached = cache.get(cnpj);
+  const cached = cache.get(cnpj) ?? negativeCache.get(cnpj);
   if (cached !== null) {
     return { ...cached.value, cache: { hit: true, ageSeconds: cached.ageSeconds } };
   }
@@ -152,10 +164,17 @@ export async function fetchCnpjSources(cnpj: string): Promise<CnpjSourcesResult>
   try {
     const result = await promise;
 
-    // So vale cachear coleta que trouxe alguma coisa: guardar quatro falhas
-    // prenderia o CNPJ em erro pelo TTL inteiro.
     const hasAnyValue = Object.values(result.sources).some((value) => value !== null);
-    if (hasAnyValue) cache.set(cnpj, result);
+
+    if (hasAnyValue) {
+      cache.set(cnpj, result);
+    } else if (Object.values(result.statuses).every((status) => status === 'not_found')) {
+      // Resposta negativa DEFINITIVA: as quatro fontes responderam e nenhuma
+      // conhece o CNPJ. Vale cachear (curto) para nao repetir consulta paga.
+      negativeCache.set(cnpj, result);
+    }
+    // Falha de rede/timeout nao entra em cache nenhum: prender o CNPJ em erro
+    // pelo TTL inteiro seria pior que consultar de novo.
 
     return { ...result, cache: { hit: false } };
   } finally {
@@ -166,4 +185,5 @@ export async function fetchCnpjSources(cnpj: string): Promise<CnpjSourcesResult>
 /** Uso em teste/diagnostico. */
 export function clearCnpjCache(): void {
   cache.clear();
+  negativeCache.clear();
 }

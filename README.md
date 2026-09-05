@@ -90,6 +90,7 @@ Render — onde não existe `.env` — quem manda são as variáveis do dashboar
 | `PUBLICA_TIMEOUT_MS` | `8000` | Timeout da `publica.cnpj.ws` |
 | `CNPJ_CACHE_TTL_MS` | `86400000` (24 h) | Validade do cache de consolidação de CNPJ. `0` desliga o cache |
 | `CNPJ_CACHE_MAX_ENTRIES` | `1000` | Teto de CNPJs no cache em memória |
+| `CNPJ_NEGATIVE_CACHE_TTL_MS` | `600000` (10 min) | Validade do cache de CNPJ **não encontrado**. Curto de propósito: protege a cota paga contra erro de digitação repetido sem segurar a resposta negativa de uma empresa recém-aberta |
 
 ### Integrações externas herdadas
 

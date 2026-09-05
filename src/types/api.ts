@@ -22,7 +22,12 @@ export interface ErrorResponse {
 // ---------------------------------------------------------------------------
 
 export type CnpjVerificationReason =
-  /** Nenhuma das fontes respondeu. */
+  /**
+   * Todas as fontes responderam, e todas disseram que o CNPJ nao existe.
+   * Diferente de `SOURCES_UNAVAILABLE`: aqui tentar de novo nao adianta.
+   */
+  | 'DOCUMENT_NOT_FOUND'
+  /** Nenhuma fonte conseguiu responder (rede, timeout, provedor fora). */
   | 'SOURCES_UNAVAILABLE'
   /** Situacao cadastral diferente de "ativa". */
   | 'REGISTRATION_INACTIVE'

@@ -96,9 +96,16 @@ import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
  *   "sources": {}, "cache": {}, "durationMs": 0
  * }
  * ```
- * `reason`: `SOURCES_UNAVAILABLE` | `REGISTRATION_INACTIVE` |
- *           `INCOMPLETE_FISCAL_DATA` (quais campos: `missingFiscalFields`) |
- *           `MISSING_POSTAL_CODE`.
+ * `reason`:
+ * - `DOCUMENT_NOT_FOUND`     as quatro fontes responderam e nenhuma conhece o
+ *                            CNPJ. Tentar de novo NAO adianta.
+ * - `SOURCES_UNAVAILABLE`    nenhuma fonte conseguiu responder (rede/timeout).
+ *                            Aqui sim vale tentar de novo.
+ * - `REGISTRATION_INACTIVE`  situacao cadastral diferente de "ativa"
+ *                            (ex.: empresa baixada).
+ * - `INCOMPLETE_FISCAL_DATA` falta campo obrigatorio; quais, em
+ *                            `missingFiscalFields`.
+ * - `MISSING_POSTAL_CODE`    sem CEP em nenhuma fonte.
  *
  * `sources` diz como cada fonte se saiu: `ok` | `not_found` | `timeout` |
  * `error` | `unavailable`. `ST: "not_found"` e resposta legitima — significa
@@ -137,7 +144,7 @@ export const verifyCnpjRoute = asyncHandler(async (req, res) => {
 
   const { sources, statuses, cache } = await fetchCnpjSources(cnpj);
 
-  const verification = verifyCnpj({ cnpj, sources, fallbackEmail });
+  const verification = verifyCnpj({ cnpj, sources, statuses, fallbackEmail });
 
   const durationMs = Date.now() - startedAt;
 
