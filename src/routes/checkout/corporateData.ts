@@ -40,6 +40,102 @@ import { AppError } from '../../services/vtex/errors.js';
  * 2. **CNPJ reprovado nao escreve nada.** O front so validava depois de ja ter
  *    limpado o `shippingData`, entao uma reprovacao no meio deixava o
  *    orderForm sem endereco.
+ *
+ * ---------------------------------------------------------------------------
+ * REQUEST
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "cnpj": "50.972.373/0001-00",
+ *   "personal": {
+ *     "email": "cliente@dominio.com",
+ *     "firstName": "Gustavo",
+ *     "lastName": "Borges",
+ *     "document": "12345678909",
+ *     "phone": "11999998888"
+ *   }
+ * }
+ * ```
+ * - `orderFormId` obrigatorio. E a credencial da operacao.
+ * - `cnpj`        obrigatorio. Com ou sem mascara.
+ * - `personal`    opcional, e cada campo dentro dele tambem. Sem ele valem os
+ *                 dados que ja estao no `clientProfileData` do orderForm. O
+ *                 e-mail precisa existir em algum dos dois lados, senao a rota
+ *                 responde `400 MISSING_CLIENT_EMAIL`.
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200 — aplicado (objeto plano, sem envelope)
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "applied": true,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "verification": { "...igual ao de /middleware/checkout/cnpj/verify..." },
+ *   "written": {
+ *     "clientProfileData": {
+ *       "email": "cliente@dominio.com",
+ *       "firstName": "Gustavo",
+ *       "lastName": "Borges",
+ *       "document": "12345678909",
+ *       "documentType": "cpf",
+ *       "phone": "+5511999998888",
+ *       "corporateName": "GROWE LTDA",
+ *       "tradeName": "GROWE LTDA",
+ *       "corporateDocument": "50972373000100",
+ *       "stateInscription": "Isento",
+ *       "corporatePhone": "+551199398511",
+ *       "isCorporate": true,
+ *       "profileCompleteOnLoading": false,
+ *       "profileErrorOnLoading": false,
+ *       "customerClass": null
+ *     },
+ *     "shippingAddress": {
+ *       "addressType": "residential",
+ *       "country": "BRA",
+ *       "postalCode": "04563000",
+ *       "city": "Sao Paulo",
+ *       "complement": "APT 43",
+ *       "neighborhood": "CIDADE MONCOES",
+ *       "state": "SP",
+ *       "street": "AV PDE ANTONIO JOSE DOS SANTOS",
+ *       "number": "258",
+ *       "receiverName": "Gustavo Borges"
+ *     },
+ *     "customData": {
+ *       "field": "custom_cnpj_data",
+ *       "value": "string JSON com os 11 campos fiscais",
+ *       "confirmed": true
+ *     }
+ *   },
+ *   "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
+ *   "cache": { "hit": false },
+ *   "durationMs": 3123
+ * }
+ * ```
+ * `written` e exatamente o que foi gravado no orderForm — da para conferir sem
+ * reler o orderForm.
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200 — CNPJ reprovado, NADA gravado
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "applied": false,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "verification": { "approved": false, "reason": "...", "message": "..." },
+ *   "sources": {}, "cache": {}, "durationMs": 0
+ * }
+ * ```
+ * Sem `written`: o orderForm nao foi tocado. Os `reason` possiveis sao os
+ * mesmos de `/middleware/checkout/cnpj/verify`.
+ *
+ * ---------------------------------------------------------------------------
+ * ERROS
+ * ---------------------------------------------------------------------------
+ * - `400 VALIDATION_ERROR`          CNPJ ou `orderFormId` fora do formato
+ * - `400 MISSING_CLIENT_EMAIL`      sem e-mail no orderForm nem em `personal`
+ * - `502 CUSTOM_DATA_NOT_PERSISTED` a VTEX aceitou mas gravou outro valor
  */
 const corporateProfileBody = z.object({
   orderFormId: orderFormIdSchema,
@@ -190,6 +286,53 @@ const discardBody = z.object({ orderFormId: orderFormIdSchema });
  * `_handleDiscardCNPJ` faz no front (`checkout-ui/.../controller.js:1063`).
  *
  * Fica no mesmo path de proposito: tudo que e CNPJ entra e sai por aqui.
+ *
+ * ---------------------------------------------------------------------------
+ * REQUEST
+ * ---------------------------------------------------------------------------
+ * ```json
+ * { "orderFormId": "cc551425e8a445878344b79b79c48f6d" }
+ * ```
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "discarded": true,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "written": {
+ *     "clientProfileData": {
+ *       "email": "cliente@dominio.com",
+ *       "firstName": "Gustavo",
+ *       "lastName": "Borges",
+ *       "document": "12345678909",
+ *       "documentType": "cpf",
+ *       "phone": "+5511999998888",
+ *       "corporateName": null,
+ *       "tradeName": null,
+ *       "corporateDocument": null,
+ *       "stateInscription": null,
+ *       "corporatePhone": null,
+ *       "isCorporate": false,
+ *       "profileCompleteOnLoading": false,
+ *       "profileErrorOnLoading": false,
+ *       "customerClass": null
+ *     }
+ *   },
+ *   "durationMs": 1383
+ * }
+ * ```
+ *
+ * ERROS
+ * - `400 VALIDATION_ERROR`     `orderFormId` fora do formato
+ * - `400 MISSING_CLIENT_EMAIL` orderForm sem `clientProfileData`: nao ha
+ *                              perfil corporativo para desfazer
+ *
+ * LIMITACAO CONHECIDA: depois do DELETE, `address` fica `null` e
+ * `selectedAddresses` vazio, mas o endereco da empresa **sobrevive em
+ * `availableAddresses`** como disposable. Testado: a VTEX ignora
+ * `availableAddresses: null` e `[]` no attachment. O front tem o mesmo residuo.
  */
 export const discardCorporateData = asyncHandler(async (req, res) => {
   const startedAt = Date.now();

@@ -12,6 +12,106 @@ import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
  * `publica.cnpj.ws` chamada do navegador), com a consolidacao, a validacao e o
  * payload do ERP prontos.
  *
+ * ---------------------------------------------------------------------------
+ * REQUEST
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "cnpj": "50.972.373/0001-00",
+ *   "fallbackEmail": "cliente@dominio.com"
+ * }
+ * ```
+ * - `cnpj`          obrigatorio. Com ou sem mascara.
+ * - `fallbackEmail` opcional, mas o checkout deve sempre mandar: vira
+ *                   `DS_EMAIL_NFD` quando a empresa nao tem e-mail proprio.
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200 — aprovado (objeto plano, sem envelope)
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "approved": true,
+ *   "reason": null,
+ *   "message": null,
+ *   "missingFiscalFields": [],
+ *   "company": {
+ *     "cnpj": "50972373000100",
+ *     "corporateName": "GROWE LTDA",
+ *     "tradeName": "GROWE LTDA",
+ *     "stateInscription": null,
+ *     "registrationStatus": "ativa",
+ *     "phone": "+551199398511",
+ *     "email": "contato@groweag.com",
+ *     "foundedAt": "2023-06-07",
+ *     "legalNature": "206-2 - Sociedade Empresaria Limitada",
+ *     "size": "ME",
+ *     "simplesNacional": true,
+ *     "mei": false,
+ *     "mainActivityCode": "9511800",
+ *     "icmsTaxpayer": null
+ *   },
+ *   "address": {
+ *     "postalCode": "04563000",
+ *     "postalCodeFormatted": "04563-000",
+ *     "street": "AV PDE ANTONIO JOSE DOS SANTOS",
+ *     "number": "258",
+ *     "complement": "APT 43",
+ *     "neighborhood": "CIDADE MONCOES",
+ *     "city": "Sao Paulo",
+ *     "state": "SP",
+ *     "country": "BRA"
+ *   },
+ *   "erpCustomData": {
+ *     "DS_EMAIL_NFD": "contato@groweag.com",
+ *     "ID_INS_ESTADUAL_SBT_TRB": null,
+ *     "ID_OPTANTE_SIMPLES": 1,
+ *     "DT_FUNDACAO": "07/06/2023",
+ *     "ID_INSCRICAO_ESTADUAL": "Isento",
+ *     "CD_CNA": "9511800",
+ *     "ID_CONTRIBUINTE_ICMS": null,
+ *     "ID_CALCULA_ICR": 0,
+ *     "NATUREZA_JURIDICA": "206-2 - Sociedade Empresaria Limitada",
+ *     "ID_MICRO_EMPRESA": 1,
+ *     "ID_MEI": 0
+ *   },
+ *   "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
+ *   "cache": { "hit": false },
+ *   "durationMs": 1178
+ * }
+ * ```
+ *
+ * `erpCustomData` e exatamente o payload de `custom_cnpj_data`: quem chama
+ * grava sem transformar nada.
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200 — reprovado (reprovacao de negocio NAO e erro HTTP)
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "approved": false,
+ *   "reason": "REGISTRATION_INACTIVE",
+ *   "message": "A situacao cadastral do CNPJ informado consta como irregular...",
+ *   "missingFiscalFields": [],
+ *   "company": {}, "address": {}, "erpCustomData": {},
+ *   "sources": {}, "cache": {}, "durationMs": 0
+ * }
+ * ```
+ * `reason`: `SOURCES_UNAVAILABLE` | `REGISTRATION_INACTIVE` |
+ *           `INCOMPLETE_FISCAL_DATA` (quais campos: `missingFiscalFields`) |
+ *           `MISSING_POSTAL_CODE`.
+ *
+ * `sources` diz como cada fonte se saiu: `ok` | `not_found` | `timeout` |
+ * `error` | `unavailable`. `ST: "not_found"` e resposta legitima — significa
+ * empresa sem inscricao estadual.
+ *
+ * ---------------------------------------------------------------------------
+ * ERROS
+ * ---------------------------------------------------------------------------
+ * - `400 VALIDATION_ERROR`       CNPJ curto ou com digito verificador errado
+ *                                (barrado antes de gastar consulta paga)
+ * - `502`/`504 SINTEGRA_*`       provedor fora ou lento
+ * - `503 SERVICE_NOT_CONFIGURED` sem `SINTEGRA_TOKEN`
+ *
  * O contrato esta em `docs/04-contratos-api.md`; o porque de cada regra, em
  * `docs/06-sintegra-e-orderform.md`.
  */
