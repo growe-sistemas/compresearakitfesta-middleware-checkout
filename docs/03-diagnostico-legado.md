@@ -35,12 +35,16 @@ navegador e Referer.
 
 > **Requisito v2:** CPF e data no **corpo** da requisição, sempre POST.
 
-### A4. `GET` que escreve
+### A4. `GET` que escreve — ✅ resolvido
 
 `setInfo/:email/:birthDate` altera a entidade CL e no VTEX IO aceitava qualquer
-verbo. Um pré-fetch de link ou um crawler altera dado.
+verbo. Um pré-fetch de link ou um crawler altera dado. Ainda por cima, e-mail e
+data de nascimento iam na URL (mesmo problema de A3).
 
-> **Requisito v2:** `PUT` com corpo. Verbo declarado explicitamente.
+> **Resolvido:** `POST|PUT /middleware/checkout/setInfo` faz a mesma operação
+> lendo `{ email, birthDate }` do corpo, com verbo declarado e data validada.
+> A versão por path segue no ar, depreciada e logando `warn`, até o
+> `checkout-ui` migrar.
 
 ### A5. Cota paga exposta
 

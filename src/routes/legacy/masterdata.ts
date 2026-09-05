@@ -118,22 +118,72 @@ export function convertDate(dateStr: string, joinStr = '-'): string {
   return dateStr.split('-').reverse().join(joinStr);
 }
 
+/**
+ * Normaliza a data de nascimento para `yyyy-MM-dd`.
+ *
+ * Aceita os dois formatos que circulam por aqui: `dd-MM-yyyy` (o que o
+ * `checkout-ui` monta hoje com o proprio `convertDate`) e ISO `yyyy-MM-dd`
+ * (o formato da v2). Sao distinguiveis sem ambiguidade pelo tamanho do
+ * primeiro grupo, entao aceitar os dois nao cria armadilha.
+ *
+ * Devolve `null` quando a data nao existe no calendario (`31-02-1995`), coisa
+ * que o `convertDate` sozinho deixava passar direto para o Master Data.
+ */
+export function normalizeBirthDate(value: string): string | null {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+  const brazilian = /^\d{2}-\d{2}-\d{4}$/.test(value) ? convertDate(value) : null;
+
+  const normalized = iso ?? brazilian;
+  if (normalized === null) return null;
+
+  // `Date.UTC` normaliza excesso (31/02 vira 03/03); comparar de volta
+  // pega a data invalida.
+  const [year, month, day] = normalized.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  const isRealDate =
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+
+  return isRealDate ? normalized : null;
+}
+
+/**
+ * Aceita `dd-MM-yyyy` ou `yyyy-MM-dd` e entrega sempre `yyyy-MM-dd`.
+ * O `refine` antes do `transform` e so para a mensagem de erro sair legivel —
+ * `pipe` devolveria "expected string, received null".
+ */
+const birthDateSchema = z
+  .string()
+  .min(1)
+  .refine((value) => normalizeBirthDate(value) !== null, {
+    message: 'birthDate invalida: use dd-MM-yyyy ou yyyy-MM-dd, com data existente',
+  })
+  .transform((value) => normalizeBirthDate(value) as string);
+
 const setBirthDateParams = z.object({
   email: z.string().min(1),
-  birthDate: z.string().min(1),
+  birthDate: birthDateSchema,
+});
+
+/** Mesma operacao, agora pelo CORPO da requisicao. */
+const setBirthDateBody = z.object({
+  email: z.string().min(1),
+  birthDate: birthDateSchema,
 });
 
 /**
- * setBirthDateCL (`/setInfo/:email/:birthDate`) — porte de
- * `middlewares/setBirthDateCL.ts`.
+ * Grava a data de nascimento na entidade CL.
  *
  * O `email` e reenviado no PATCH de proposito: a entidade CL exige o campo
  * obrigatorio mesmo em atualizacao parcial, senao a VTEX devolve
  * 400 "Required field: 'email'".
  */
-export const setBirthDateCL = asyncHandler(async (req, res) => {
-  const { email, birthDate } = setBirthDateParams.parse(req.params);
-
+async function applyBirthDate(
+  email: string,
+  isoBirthDate: string,
+): Promise<{ updated: boolean; id?: string; reason?: string }> {
   const documents = await searchDocuments('CL', ['id'], `email=${email}`, {
     page: 1,
     pageSize: 1,
@@ -143,17 +193,53 @@ export const setBirthDateCL = asyncHandler(async (req, res) => {
 
   if (typeof id !== 'string' || id === '') {
     logger.info({ email }, 'Nenhum documento CL para o e-mail');
-    res.status(200).json({
-      updated: false,
-      reason: `Nenhum cadastro (CL) encontrado para ${email}`,
-    });
-    return;
+    return { updated: false, reason: `Nenhum cadastro (CL) encontrado para ${email}` };
   }
 
   await updateDocument('CL', id, {
     email,
-    birthDate: `${convertDate(birthDate)}T00:00:00+00:00`,
+    birthDate: `${isoBirthDate}T00:00:00+00:00`,
   });
 
-  res.status(200).json({ updated: true, id });
+  return { updated: true, id };
+}
+
+/**
+ * setBirthDateCL (`/setInfo/:email/:birthDate`) — porte de
+ * `middlewares/setBirthDateCL.ts`.
+ *
+ * DEPRECADA: dado pessoal em path de URL (vaza para log de proxy, histórico e
+ * Referer) e, herdado do VTEX IO, um `GET` que escreve. Use a versao por
+ * corpo, `setBirthDateCLFromBody`. Continua no ar so enquanto o `checkout-ui`
+ * em producao ainda chamar este formato.
+ */
+export const setBirthDateCL = asyncHandler(async (req, res) => {
+  const { email, birthDate } = setBirthDateParams.parse(req.params);
+
+  logger.warn(
+    { email },
+    'Uso da rota depreciada /setInfo/:email/:birthDate (dado pessoal em URL)',
+  );
+
+  res.status(200).json(await applyBirthDate(email, birthDate));
+});
+
+/**
+ * `POST|PUT /middleware/checkout/setInfo` — a MESMA operacao, por corpo:
+ *
+ * ```json
+ * { "email": "cliente@dominio.com", "birthDate": "24-11-1995" }
+ * ```
+ *
+ * Substitui `/setInfo/:email/:birthDate`. Ganhos: o e-mail e a data de
+ * nascimento saem da URL, o verbo passa a declarar que a chamada escreve, e a
+ * data invalida e barrada antes de chegar ao Master Data.
+ *
+ * A resposta e identica a da rota antiga, para a troca no front ser so o
+ * `fetch`.
+ */
+export const setBirthDateCLFromBody = asyncHandler(async (req, res) => {
+  const { email, birthDate } = setBirthDateBody.parse(req.body);
+
+  res.status(200).json(await applyBirthDate(email, birthDate));
 });

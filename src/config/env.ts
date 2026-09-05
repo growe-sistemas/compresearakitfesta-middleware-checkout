@@ -25,8 +25,13 @@ const envSchema = z.object({
   VTEX_BASE_URL: z
     .string()
     .url('VTEX_BASE_URL precisa ser uma URL valida')
-    // normaliza: sem barra no final, para concatenar paths sem surpresa
-    .transform((url) => url.replace(/\/+$/, '')),
+    // Normaliza a base para SO o host.
+    //
+    // Sem barra no final, para concatenar paths sem surpresa. E sem `/api` no
+    // final: todo path deste codigo ja comeca com `/api/` (dataentities,
+    // catalog_system, giftcards), entao um `/api` aqui viraria `/api/api/...` e
+    // a VTEX responderia 400 em TODA rota que toca o upstream.
+    .transform((url) => url.replace(/\/+$/, '').replace(/\/api$/, '')),
 
   /**
    * Chave que protege as rotas NAO publicas.

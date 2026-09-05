@@ -185,6 +185,14 @@ Substitui `setInfo/:email/:birthDate` — deixa de ser um `GET` que escreve.
 A conversão para `1990-05-20T00:00:00+00:00` e o reenvio obrigatório do campo
 `email` (exigência do schema da CL) ficam **dentro** do middleware.
 
+> ✅ **Já existe uma ponte para isso.** `POST|PUT /middleware/checkout/setInfo`
+> aceita exatamente `{ email, birthDate }` no corpo, com a mesma resposta da
+> rota antiga por path. Foi feita no path legado de propósito: o front troca só
+> o `fetch`, sem esperar o resto da v2. Diferenças para o contrato acima:
+> `birthDate` aceita `dd-MM-yyyy` **ou** ISO (a v2 padroniza em ISO), e a
+> resposta é `{ updated, id }` / `{ updated: false, reason }` em vez do envelope
+> `{ data }`.
+
 ---
 
 ### 2.4 `POST /v2/customers/addresses/lookup`

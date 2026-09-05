@@ -168,6 +168,23 @@ da URL, decisão pronta em vez de dado bruto). Detalhes em
 | --- | --- | --- | --- |
 | `/v2/documents/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
 
+E, no path legado, a mesma operação do `setInfo` agora aceita **corpo** em vez
+de parâmetros de URL:
+
+| Rota | Método | Auth | Substitui |
+| --- | --- | --- | --- |
+| `/middleware/checkout/setInfo` | POST, PUT | pública | `/middleware/checkout/setInfo/:email/:birthDate` |
+
+```bash
+curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type: application/json' -d '{"email":"cliente@dominio.com","birthDate":"24-11-1995"}'
+```
+
+`birthDate` aceita `dd-MM-yyyy` (o formato que o `checkout-ui` já monta) ou ISO
+`yyyy-MM-dd`; data inexistente (`31-02-1995`) responde `400` em vez de ir para o
+Master Data. A resposta é idêntica à da rota antiga — migrar o front é trocar só
+o `fetch`. A versão por path continua no ar, **depreciada** (loga um `warn` a
+cada uso).
+
 ```bash
 curl -X POST http://localhost:3000/v2/documents/cnpj/verify -H 'Content-Type: application/json' -d '{"cnpj":"50.972.373/0001-00","fallbackEmail":"cliente@dominio.com"}'
 ```

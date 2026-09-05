@@ -8,6 +8,7 @@ import {
   getAddressPosition,
   getBirthDateCL,
   setBirthDateCL,
+  setBirthDateCLFromBody,
 } from './masterdata.js';
 import { getDataRamdom, makeClusterAlive } from './misc.js';
 import {
@@ -73,3 +74,17 @@ for (const route of LEGACY_ROUTES) {
     }
   }
 }
+
+/**
+ * Fora do manifesto de proposito: o `LEGACY_ROUTES` e copia fiel do
+ * `service.json` do app VTEX IO, e esta rota nao existe la.
+ *
+ * `POST|PUT /middleware/checkout/setInfo` faz a mesma coisa que
+ * `/setInfo/:email/:birthDate`, mas lendo `{ email, birthDate }` do CORPO.
+ * Mesmo path base e mesma resposta — migrar o front e trocar so o `fetch`.
+ *
+ * Nao ha conflito de rota: o Express casa por numero de segmentos, entao
+ * `/setInfo` e `/setInfo/:email/:birthDate` sao caminhos distintos.
+ */
+legacyRouter.post('/middleware/checkout/setInfo', parseBody, setBirthDateCLFromBody);
+legacyRouter.put('/middleware/checkout/setInfo', parseBody, setBirthDateCLFromBody);
