@@ -47,6 +47,9 @@ async function query(
     url: url.toString(),
     schema: sintegraResponseSchema,
     logLabel: `plugin=${plugin}`,
+    // O plugin SN ja foi medido em 21s: o timeout padrao da VTEX (10s) cortaria
+    // a consulta antes de ela responder.
+    timeoutMs: env.SINTEGRA_TIMEOUT_MS,
   });
 }
 

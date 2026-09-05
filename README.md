@@ -14,6 +14,10 @@ compartilhado e devolve os dados normalizados.
 > As rotas do orderForm ainda não existem — o de/para sai do payload real da
 > requisição. Ver [Endpoints](#endpoints) e [Mapeamento](#mapeamento-depara).
 
+📚 **[`docs/`](docs/README.md)** — regra de negócio do checkout, mapa das
+chamadas do front, diagnóstico do legado e os
+[contratos da API v2](docs/04-contratos-v2.md) (proposta das requisições novas).
+
 ---
 
 ## Rodando local
@@ -80,6 +84,11 @@ Render — onde não existe `.env` — quem manda são as variáveis do dashboar
 | `VTEX_TIMEOUT_MS` | `10000` | Timeout **por tentativa** na VTEX |
 | `VTEX_MAX_RETRIES` | `3` | Retentativas em 408/429/5xx e falha de rede |
 | `API_KEY` | — | Protege `createGiftCard` (mínimo 16 caracteres). Sem ela, essa rota responde 503 |
+| `SINTEGRA_TIMEOUT_MS` | `30000` | Timeout por consulta na SintegraWS. Folgado de propósito: o plugin `SN` já foi medido em **21 s** |
+| `PUBLICA_CNPJ_BASE_URL` | `https://publica.cnpj.ws/cnpj` | Base pública da Receita, usada como fonte complementar de CNPJ |
+| `PUBLICA_TIMEOUT_MS` | `8000` | Timeout da `publica.cnpj.ws` |
+| `CNPJ_CACHE_TTL_MS` | `86400000` (24 h) | Validade do cache de consolidação de CNPJ. `0` desliga o cache |
+| `CNPJ_CACHE_MAX_ENTRIES` | `1000` | Teto de CNPJs no cache em memória |
 
 ### Integrações externas herdadas
 
@@ -148,6 +157,31 @@ nunca é logado. Sem `API_KEY` definida no ambiente, essa rota responde
 
 Responde sobre **este processo**, sem tocar na VTEX — assim uma instabilidade
 da VTEX não faz o Render derrubar o serviço.
+
+### API v2 — rotas novas
+
+Contrato consistente (envelope `{ data, meta }`, erro único, dado pessoal fora
+da URL, decisão pronta em vez de dado bruto). Detalhes em
+[`docs/04-contratos-v2.md`](docs/04-contratos-v2.md).
+
+| Rota | Método | Auth | Substitui |
+| --- | --- | --- | --- |
+| `/v2/documents/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
+
+```bash
+curl -X POST http://localhost:3000/v2/documents/cnpj/verify -H 'Content-Type: application/json' -d '{"cnpj":"50.972.373/0001-00","fallbackEmail":"cliente@dominio.com"}'
+```
+
+Uma requisição no lugar de quatro, com as quatro fontes consultadas em paralelo
+no servidor, cache de 24 h por CNPJ, dedupe de requisição em voo, dígito
+verificador conferido antes de gastar consulta paga, e o payload
+`custom_cnpj_data` do ERP montado pronto. `meta.sources` diz como cada fonte se
+saiu; `missingFiscalFields` diz exatamente o que faltou quando reprova.
+
+> ⚠️ Ao ligar no `checkout-ui`, três campos mudam de valor no ERP
+> (`ID_MICRO_EMPRESA`, `ID_MEI`, `NATUREZA_JURIDICA`) e `ID_INSCRICAO_ESTADUAL`
+> passa a chegar sempre. Tabela completa em
+> [`docs/04`, seção 2.6](docs/04-contratos-v2.md#26-post-v2documentscnpjverify--implementado).
 
 ### Rotas portadas do app VTEX IO
 

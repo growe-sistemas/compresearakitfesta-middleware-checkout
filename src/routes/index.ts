@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { legacyRouter } from './legacy/index.js';
+import { v2Router } from './v2/index.js';
+import { customersRouter } from './customers.js';
 
 /**
  * Rotas de negocio.
@@ -15,4 +17,8 @@ import { legacyRouter } from './legacy/index.js';
  */
 export const apiRouter: Router = Router();
 
+// v2 primeiro: rotas novas, contrato consistente (docs/04-contratos-v2.md).
+apiRouter.use(v2Router);
+// Porte fiel do app VTEX IO. Sai quando o front parar de chamar.
 apiRouter.use(legacyRouter);
+apiRouter.use(customersRouter);

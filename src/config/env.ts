@@ -61,10 +61,33 @@ const envSchema = z.object({
   SEARA_KEY: z.string().min(1).optional(),
   SEARA_COOKIE: z.string().optional(),
 
+  /**
+   * CNPJ publico (publica.cnpj.ws). No fluxo antigo era chamada DIRETO do
+   * navegador do cliente; agora e uma fonte como as outras, com timeout,
+   * retry e cache do lado do servidor.
+   */
+  PUBLICA_CNPJ_BASE_URL: z.string().url().default('https://publica.cnpj.ws/cnpj'),
+
   // Opcionais com default
   CORS_ORIGINS: z.string().default('*'),
   VTEX_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   VTEX_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
+
+  /**
+   * Timeout das consultas de documento. O plugin SN da SintegraWS ja foi
+   * medido em 21s, entao o default e folgado de proposito — se o SN estourar,
+   * o CNPJ perde a informacao de Simples Nacional.
+   */
+  SINTEGRA_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  /** A publica.cnpj.ws responde em ~300ms; nao vale esperar por ela. */
+  PUBLICA_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000),
+
+  /**
+   * Cache em memoria da consolidacao de CNPJ. Dado de Receita muda pouco;
+   * 24h evita repetir os 21s do SN a cada clique em "Buscar".
+   */
+  CNPJ_CACHE_TTL_MS: z.coerce.number().int().min(0).default(24 * 60 * 60 * 1000),
+  CNPJ_CACHE_MAX_ENTRIES: z.coerce.number().int().positive().default(1_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

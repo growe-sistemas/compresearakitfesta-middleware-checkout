@@ -22,7 +22,7 @@ export class AppError extends Error {
 }
 
 /** Servicos externos que este middleware consome. */
-export type Upstream = 'VTEX' | 'SINTEGRA' | 'SEARA';
+export type Upstream = 'VTEX' | 'SINTEGRA' | 'SEARA' | 'PUBLICA_CNPJ';
 
 /** Falha ao falar com um upstream (rede, timeout ou status de erro). */
 export class UpstreamError extends AppError {
