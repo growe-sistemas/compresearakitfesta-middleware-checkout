@@ -185,6 +185,7 @@ de parâmetros de URL:
 | `/middleware/checkout/custom-data/birth-date` | POST | pública | o `PUT` de `customData` que o `checkout-ui` fazia direto na VTEX |
 | `/middleware/checkout/corporate-data` | POST, DELETE | pública | o `_handleCNPJSearchBtnClickEv` e o `_handleDiscardCNPJ` inteiros |
 | `/middleware/checkout/custom-data/delivery-date` | POST | pública | o `setScheduleDateCheckout` do `checkout-ui` |
+| `/middleware/checkout/custom-data/erp-address-id` | POST | pública | o `SetAddress` do `checkout-ui` — `getAddressPosition` **e** a gravação, numa chamada |
 
 ```bash
 curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type: application/json' -d '{"email":"cliente@dominio.com","birthDate":"24-11-1995"}'

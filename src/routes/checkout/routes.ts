@@ -1,7 +1,11 @@
 import type { RequestHandler } from 'express';
 import { verifyCnpjRoute } from './cnpj.js';
 import { discardCorporateData, setCorporateData } from './corporateData.js';
-import { setBirthDateCustomData, setDeliveryDateCustomData } from './customData.js';
+import {
+  setBirthDateCustomData,
+  setDeliveryDateCustomData,
+  setErpAddressIdCustomData,
+} from './customData.js';
 import { getEmployee } from './employee.js';
 import { getDataInMasterData, updateDataMD } from './genericMasterData.js';
 import {
@@ -103,6 +107,13 @@ export const CHECKOUT_ROUTES: readonly CheckoutRoute[] = [
     handler: setDeliveryDateCustomData,
     auth: 'public',
     summary: 'Grava a data de entrega escolhida em customData.custom_delivery_date e confere a gravacao.',
+  },
+  {
+    path: '/middleware/checkout/custom-data/erp-address-id',
+    methods: ['POST'],
+    handler: setErpAddressIdCustomData,
+    auth: 'public',
+    summary: 'Descobre a posicao do endereco de entrega na lista do cliente e grava em customData.current_address_id.',
   },
   {
     path: '/middleware/checkout/setInfo',

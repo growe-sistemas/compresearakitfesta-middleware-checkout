@@ -4,36 +4,11 @@ import { logger } from '../../config/logger.js';
 import { parseFlexibleDate } from '../../mappers/date.js';
 import { findAddressPosition } from '../../mappers/addressPosition.js';
 import {
+  findAddresses,
+  findClient,
   searchDocuments,
   updateDocument,
-  type MasterDataDocument,
 } from '../../services/vtex/masterdata.js';
-import { vtexRequest } from '../../services/vtex/client.js';
-import { MASTERDATA_ACCEPT } from '../../services/vtex/client.js';
-
-const documentListSchema = z.array(z.record(z.unknown()));
-
-/** Busca o documento CL por email ou userId, como no app original. */
-async function findClient(options: {
-  email?: string | undefined;
-  userId?: string | undefined;
-  fields: readonly string[];
-}): Promise<MasterDataDocument[]> {
-  const where =
-    options.email !== undefined ? `email=${options.email}` : `userId=${options.userId ?? ''}`;
-
-  return searchDocuments('CL', options.fields, where, { page: 1, pageSize: 1 });
-}
-
-/** Enderecos (AD) do cliente, ordenados por `createdIn ASC`. */
-async function findAddresses(clientId: string): Promise<MasterDataDocument[]> {
-  return vtexRequest({
-    path: '/api/dataentities/AD/search',
-    schema: documentListSchema,
-    headers: { Accept: MASTERDATA_ACCEPT, 'REST-Range': 'resources=0-100' },
-    query: { _where: `userId=${clientId}`, _fields: '_all', _sort: 'createdIn ASC' },
-  });
-}
 
 const addressPositionBody = z.object({
   userId: z.string().optional(),

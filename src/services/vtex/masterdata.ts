@@ -103,3 +103,37 @@ export async function updateDocument(
     headers: baseHeaders,
   });
 }
+
+/**
+ * Documento CL do cliente, por e-mail ou por `userId` (o `userProfileId` do
+ * orderForm). Devolve no maximo um.
+ */
+export async function findClient(options: {
+  email?: string | undefined;
+  userId?: string | undefined;
+  fields: readonly string[];
+}): Promise<MasterDataDocument[]> {
+  const where =
+    options.email !== undefined ? `email=${options.email}` : `userId=${options.userId ?? ''}`;
+
+  return searchDocuments('CL', options.fields, where, { page: 1, pageSize: 1 });
+}
+
+/**
+ * Enderecos (entidade AD) do cliente, na ordem de criacao.
+ *
+ * ATENCAO: o campo `userId` da AD NAO e o `userProfileId` do orderForm — e o
+ * **id do documento CL**. A cadeia e sempre `email (ou userId) -> CL.id ->
+ * AD.userId`.
+ *
+ * A ordem (`createdIn ASC`) e o que define a posicao usada como
+ * `current_address_id` no ERP: mudar isso muda o dado que o ERP recebe.
+ */
+export async function findAddresses(clientId: string): Promise<MasterDataDocument[]> {
+  return vtexRequest({
+    path: '/api/dataentities/AD/search',
+    schema: documentListSchema,
+    headers: { ...baseHeaders, 'REST-Range': 'resources=0-100' },
+    query: { _where: `userId=${clientId}`, _fields: '_all', _sort: 'createdIn ASC' },
+  });
+}

@@ -4,9 +4,13 @@ import { logger } from '../../config/logger.js';
 import { AppError } from '../../services/vtex/errors.js';
 import {
   CUSTOM_DATA_FIELDS,
+  getOrderForm,
   orderFormIdSchema,
   putCustomData,
+  type OrderFormResponse,
 } from '../../services/vtex/checkout.js';
+import { findAddresses, findClient } from '../../services/vtex/masterdata.js';
+import { findAddressPosition } from '../../mappers/addressPosition.js';
 import { parseFlexibleDate, toBrazilianDate } from '../../mappers/date.js';
 
 /**
@@ -33,6 +37,29 @@ function dateField(nome: string) {
       message: `${nome} invalida: use dd-MM-yyyy, dd/MM/yyyy ou YYYY-MM-DD, com data existente`,
     })
     .transform((value) => parseFlexibleDate(value) as string);
+}
+
+/**
+ * Endereco escolhido no checkout. Le `selectedAddresses[0]`, de onde o
+ * `SetAddress` do `checkout-ui` tira CEP e numero.
+ */
+function readSelectedAddress(
+  orderForm: OrderFormResponse,
+): { postalCode: string; number: string } | null {
+  const shipping = (orderForm as Record<string, unknown> | null)?.['shippingData'];
+  if (typeof shipping !== 'object' || shipping === null) return null;
+
+  const selected = (shipping as Record<string, unknown>)['selectedAddresses'];
+  if (!Array.isArray(selected) || selected.length === 0) return null;
+
+  const first: unknown = selected[0];
+  if (typeof first !== 'object' || first === null) return null;
+
+  const address = first as Record<string, unknown>;
+  const postalCode = typeof address['postalCode'] === 'string' ? address['postalCode'] : '';
+  const number = typeof address['number'] === 'string' ? address['number'] : '';
+
+  return postalCode === '' ? null : { postalCode, number };
 }
 
 const birthDateBody = z.object({
@@ -178,6 +205,147 @@ export const setDeliveryDateCustomData = asyncHandler(async (req, res) => {
     field,
     value,
     deliveryDate,
+    confirmed: result.confirmed,
+    storedValue: result.storedValue,
+  });
+});
+
+const erpAddressIdBody = z.object({ orderFormId: orderFormIdSchema });
+
+/**
+ * `POST /middleware/checkout/custom-data/erp-address-id`
+ *
+ * Descobre a posicao do endereco de entrega na lista do cliente e grava em
+ * `customData.current_address_id`. E o numero que o ERP usa para saber QUAL
+ * dos enderecos cadastrados e o da entrega.
+ *
+ * Faz sozinha o que hoje sao duas etapas separadas no `checkout-ui`
+ * (`SetAddress/index.js`): consultar a posicao e gravar o campo. Nao ha chamada
+ * HTTP entre elas — as buscas de CL e AD e o calculo da posicao rodam aqui
+ * dentro.
+ *
+ * ---------------------------------------------------------------------------
+ * REQUEST
+ * ---------------------------------------------------------------------------
+ * ```json
+ * { "orderFormId": "cc551425e8a445878344b79b79c48f6d" }
+ * ```
+ * So o `orderFormId`: o e-mail e o endereco selecionado saem do proprio
+ * orderForm, entao nao ha como o chamador mandar endereco desatualizado.
+ *
+ * ---------------------------------------------------------------------------
+ * FLUXO
+ * ---------------------------------------------------------------------------
+ * 1. Le o orderForm.
+ * 2. **PJ** -> posicao `1`, sem consultar a AD. O endereco da PJ vem da Junta
+ *    Comercial e nao esta na lista do cliente; e o valor que o ERP ja recebe.
+ * 3. **PF** -> `clientProfileData.email` -> documento CL -> enderecos AD
+ *    (`_sort=createdIn ASC`) -> posicao 1-based do que casa CEP + numero de
+ *    `shippingData.selectedAddresses[0]`.
+ * 4. Grava `current_address_id` como STRING e confere a gravacao.
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "updated": true,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "field": "current_address_id",
+ *   "value": "1",
+ *   "position": 1,
+ *   "matched": true,
+ *   "addressCount": 3,
+ *   "isCorporate": false,
+ *   "confirmed": true,
+ *   "storedValue": "1"
+ * }
+ * ```
+ * `position`, `matched` e `addressCount` vao junto porque sem eles nao da para
+ * saber se a posicao veio de um endereco que casou ou do fallback.
+ *
+ * CASOS DE BORDA (herdados do `getAddressPosition`, preservados):
+ * - casou CEP + numero       -> indice + 1
+ * - nao casou nenhum         -> `length + 1` (proxima posicao livre)
+ * - cliente sem documento CL -> `1`
+ * - PJ                       -> `1`
+ *
+ * ERROS
+ * - `400 VALIDATION_ERROR`          `orderFormId` fora do formato
+ * - `400 MISSING_SELECTED_ADDRESS`  PF sem endereco escolhido no orderForm.
+ *                                   Chamar antes da escolha e erro de quem
+ *                                   chama; inventar posicao seria pior.
+ * - `502 CUSTOM_DATA_NOT_PERSISTED` a VTEX aceitou mas gravou outro valor
+ */
+export const setErpAddressIdCustomData = asyncHandler(async (req, res) => {
+  const { orderFormId } = erpAddressIdBody.parse(req.body);
+
+  const orderForm = await getOrderForm(orderFormId);
+  const profile = orderForm?.clientProfileData ?? null;
+  const isCorporate = profile?.['isCorporate'] === true;
+
+  let position = 1;
+  let matched = false;
+  let addressCount = 0;
+
+  if (!isCorporate) {
+    const selected = readSelectedAddress(orderForm);
+    if (selected === null) {
+      throw new AppError(
+        400,
+        'MISSING_SELECTED_ADDRESS',
+        'O orderForm ainda nao tem endereco selecionado: nao ha o que posicionar na lista do cliente',
+      );
+    }
+
+    const email = typeof profile?.['email'] === 'string' ? profile['email'] : undefined;
+
+    // Sem e-mail nao ha como chegar ao documento CL, e sem CL nao ha lista de
+    // enderecos. Cliente convidado cai aqui e fica com a posicao 1 — mesmo
+    // comportamento do `getAddressPosition`.
+    if (email !== undefined && email !== '') {
+      const clients = await findClient({ email, fields: ['id', 'email'] });
+      const clientId = clients[0]?.['id'];
+
+      if (typeof clientId === 'string' && clientId !== '') {
+        // `userId` da AD e o id do documento CL, nao o userProfileId.
+        const addresses = await findAddresses(clientId);
+        addressCount = addresses.length;
+        position = findAddressPosition(addresses, selected.postalCode, selected.number);
+        matched = position <= addresses.length;
+      }
+    }
+  }
+
+  const { app, field } = CUSTOM_DATA_FIELDS.addressId;
+  // String de proposito: campo de customData na VTEX e texto. O `checkout-ui`
+  // mandava numero e deixava a VTEX coagir.
+  const value = String(position);
+
+  const result = await putCustomData({ orderFormId, app, field, value });
+
+  if (result.storedValue !== null && !result.confirmed) {
+    throw new AppError(
+      502,
+      'CUSTOM_DATA_NOT_PERSISTED',
+      `A VTEX aceitou a gravacao de ${field} mas devolveu "${result.storedValue}" em vez de "${value}"`,
+    );
+  }
+
+  logger.info(
+    { orderFormId, field, value, position, matched, addressCount, isCorporate },
+    'customData gravado no orderForm',
+  );
+
+  res.status(200).json({
+    updated: true,
+    orderFormId: result.orderFormId ?? orderFormId,
+    field,
+    value,
+    position,
+    matched,
+    addressCount,
+    isCorporate,
     confirmed: result.confirmed,
     storedValue: result.storedValue,
   });

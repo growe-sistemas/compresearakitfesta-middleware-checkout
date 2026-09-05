@@ -125,9 +125,44 @@ Aceitar data-e-hora existe para o front poder mandar o
 > `new Date(iso).getDate()`, ou seja, o fuso do *navegador*. Aqui a regra é
 > explícita e não depende de onde o código roda.
 
-Falta um: `current_address_id`, que segue saindo do navegador. A camada de
-serviço já é genérica (`putCustomData` / `deleteCustomData` em
-`services/vtex/checkout.ts`), então é só uma rota nova.
+### E o `current_address_id`
+
+`POST /middleware/checkout/custom-data/erp-address-id` ✅ faz a requisição 4 da
+tabela — e faz sozinha o que hoje são duas etapas no `checkout-ui`: descobrir a
+posição do endereço e gravar o campo.
+
+```jsonc
+// request — só o orderFormId
+{ "orderFormId": "cc551425e8a445878344b79b79c48f6d" }
+
+// response 200
+{
+  "updated": true, "orderFormId": "…",
+  "field": "current_address_id", "value": "1",
+  "position": 1, "matched": true, "addressCount": 1, "isCorporate": false,
+  "confirmed": true, "storedValue": "1"
+}
+```
+
+O e-mail e o endereço selecionado saem do próprio orderForm, então não há como
+o chamador mandar endereço desatualizado. A cadeia é
+`clientProfileData.email → documento CL → AD (userId = id do CL, ordenado por
+createdIn ASC) → posição 1-based do que casa CEP + número`.
+
+| Situação | Posição |
+| --- | --- |
+| Casou CEP + número | índice + 1 |
+| Não casou nenhum | `length + 1` (próxima livre) |
+| Cliente sem documento CL (convidado) | `1` |
+| PJ | `1`, sem consultar a AD |
+
+`position`, `matched` e `addressCount` vão na resposta porque sem eles não dá
+para saber se a posição veio de um endereço que casou ou do fallback.
+
+PF sem endereço escolhido no orderForm responde `400 MISSING_SELECTED_ADDRESS`:
+chamar antes da escolha é erro de quem chama, e inventar posição seria pior.
+
+**Com isso os quatro campos do escopo são gravados pelo servidor.**
 
 ---
 
@@ -136,7 +171,7 @@ serviço já é genérica (`putCustomData` / `deleteCustomData` em
 | Origem | Escreve `customData`? |
 | --- | --- |
 | `searakifesta-checkout-ui` (o JS do checkout) | **Sim** — os 5 campos. |
-| Este middleware | **Sim: `custom_birth_date`, `custom_cnpj_data` e `custom_delivery_date`.** Falta `current_address_id`. |
+| Este middleware | **Sim, os quatro do escopo**: `custom_birth_date`, `custom_cnpj_data`, `custom_delivery_date` e `current_address_id`. |
 | App VTEX IO `kitfesta-seara/node` | **Não.** Nenhuma das 16 rotas toca `customData`. |
 | store-theme (`kitfesta-seara/react`) | **Não.** |
 
