@@ -96,6 +96,27 @@ chamada. Contrato completo em
 O `DELETE` do `custom_cnpj_data` (requisição 3) também está lá, no mesmo path
 com verbo `DELETE`: tudo que é CNPJ entra e sai por um recurso só.
 
+#### Quando a entrega **não** pode ser o endereço da empresa
+
+`POST /middleware/checkout/custom-data/cnpj` ✅ faz só a requisição 2 — grava o
+`custom_cnpj_data` e **não toca em `shippingData` nem em `clientProfileData`**.
+
+```jsonc
+// request
+{ "orderFormId": "cc551425e8a445878344b79b79c48f6d", "cnpj": "50.972.373/0001-00" }
+```
+
+Serve para o pedido em que o endereço de entrega já está definido e não pode
+ser substituído pelo da Junta Comercial. A consulta usa as **mesmas três
+camadas** do `corporate-data` (memória → `CB` → SintegraWS), então um CNPJ
+conhecido responde em ~1 s.
+
+`fallbackEmail` é opcional: sem ele a rota lê o e-mail do próprio orderForm.
+CNPJ reprovado não grava nada — `updated: false` com o motivo.
+
+⚠️ Como não escreve `clientProfileData`, **`isCorporate` continua `false`**.
+Quem marca o pedido como corporativo é o front, ou o `corporate-data`.
+
 ### E o `custom_delivery_date`
 
 `POST /middleware/checkout/custom-data/delivery-date` ✅ faz a requisição 5 da tabela.

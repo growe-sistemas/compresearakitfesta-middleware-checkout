@@ -169,6 +169,7 @@ da URL, decisão pronta em vez de dado bruto). Detalhes em
 | `/middleware/checkout/custom-data/birth-date` | POST | o `PUT` de `custom_birth_date` feito direto na VTEX |
 | `/middleware/checkout/custom-data/delivery-date` | POST | `setScheduleDateCheckout` |
 | `/middleware/checkout/custom-data/erp-address-id` | POST | `SetAddress` — `getAddressPosition` **e** a gravação, numa chamada |
+| `/middleware/checkout/custom-data/cnpj` | POST | grava **só** o `custom_cnpj_data`, sem tocar em `shippingData` |
 | `/middleware/checkout/setInfo` | POST, PUT | `/middleware/checkout/setInfo/:email/:birthDate` |
 
 Todas públicas, todas com resposta em objeto plano.

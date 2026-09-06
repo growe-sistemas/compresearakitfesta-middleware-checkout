@@ -36,10 +36,12 @@ import { AppError } from '../../services/vtex/errors.js';
  *
  * Duas diferencas de comportamento que valem registro:
  *
- * 1. **As escritas sao sequenciais.** O front usa `Promise.all`
- *    (`controller.js:1726`), mas attachments do orderForm sao estado
- *    compartilhado: escritas concorrentes podem se sobrepor e a ultima
- *    resposta nao reflete as outras. Em ordem, cada passo enxerga o anterior.
+ * 1. **As escritas sao sequenciais, e a ORDEM importa.** O front usa
+ *    `Promise.all` (`controller.js:1726`), mas attachments do orderForm sao
+ *    estado compartilhado. Pior: gravar `clientProfileData` com um e-mail
+ *    cadastrado faz a VTEX carregar os enderecos DAQUELE cliente para dentro
+ *    do `shippingData`. Por isso a sequencia e perfil -> limpar -> endereco da
+ *    empresa: so assim o endereco da Junta Comercial e a ultima palavra.
  * 2. **CNPJ reprovado nao escreve nada.** O front so validava depois de ja ter
  *    limpado o `shippingData`, entao uma reprovacao no meio deixava o
  *    orderForm sem endereco.
@@ -250,9 +252,29 @@ export const setCorporateData = asyncHandler(async (req, res) => {
     receiverName: buildReceiverName(profile),
   });
 
-  // 3) Escritas, em ordem.
+  // 3) Escritas, em ordem. A ORDEM IMPORTA — ver o bloco abaixo.
+  //
+  // O perfil vem PRIMEIRO de proposito: gravar `clientProfileData` com um
+  // e-mail que tem cadastro faz a VTEX carregar sozinha os enderecos daquele
+  // cliente para dentro de `selectedAddresses` e `availableAddresses`.
+  // (Verificado: um POST so de clientProfileData, sem tocar em shippingData,
+  // ja traz o endereco pessoal do comprador.)
+  //
+  // Se o endereco da empresa fosse gravado antes, esse carregamento entraria
+  // DEPOIS e o pedido PJ terminaria com o endereco residencial do comprador
+  // junto — as vezes ate como o escolhido.
+  await sendAttachment({
+    orderFormId,
+    attachmentId: 'clientProfileData',
+    payload: { ...profile },
+  });
+
+  // Limpa o que a VTEX acabou de carregar do perfil, e tambem o endereco
+  // anterior do orderForm. Sem isto o endereco do PF sobrevive em
+  // `availableAddresses` e pode voltar no calculo de frete.
   await clearShippingData(orderFormId);
 
+  // Endereco da Junta Comercial — a ultima palavra sobre a entrega.
   await sendAttachment({
     orderFormId,
     attachmentId: 'shippingData',
@@ -261,12 +283,6 @@ export const setCorporateData = asyncHandler(async (req, res) => {
       // Sem isto, CEP que a VTEX nao reconhece apagaria o endereco recem-gravado.
       clearAddressIfPostalCodeNotFound: false,
     },
-  });
-
-  await sendAttachment({
-    orderFormId,
-    attachmentId: 'clientProfileData',
-    payload: { ...profile },
   });
 
   const { app, field } = CUSTOM_DATA_FIELDS.cnpjData;

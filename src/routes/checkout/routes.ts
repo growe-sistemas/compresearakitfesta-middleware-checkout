@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import { discardCorporateData, setCorporateData } from './corporateData.js';
 import {
   setBirthDateCustomData,
+  setCnpjCustomData,
   setDeliveryDateCustomData,
   setErpAddressIdCustomData,
 } from './customData.js';
@@ -92,6 +93,13 @@ export const CHECKOUT_ROUTES: readonly CheckoutRoute[] = [
     handler: setBirthDateCustomData,
     auth: 'public',
     summary: 'Grava a data de nascimento em customData.custom_birth_date e confere a gravacao.',
+  },
+  {
+    path: '/middleware/checkout/custom-data/cnpj',
+    methods: ['POST'],
+    handler: setCnpjCustomData,
+    auth: 'public',
+    summary: 'Consulta o CNPJ e grava SO customData.custom_cnpj_data, sem tocar em shippingData nem no perfil.',
   },
   {
     path: '/middleware/checkout/custom-data/delivery-date',

@@ -11,6 +11,8 @@ import {
 } from '../../services/vtex/checkout.js';
 import { findAddresses, findClient } from '../../services/vtex/masterdata.js';
 import { findAddressPosition } from '../../mappers/addressPosition.js';
+import { isValidCnpj, verifyCnpj } from '../../mappers/cnpj.js';
+import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
 import { parseFlexibleDate, toBrazilianDate } from '../../mappers/date.js';
 
 /**
@@ -348,5 +350,165 @@ export const setErpAddressIdCustomData = asyncHandler(async (req, res) => {
     isCorporate,
     confirmed: result.confirmed,
     storedValue: result.storedValue,
+  });
+});
+
+const cnpjCustomDataBody = z.object({
+  orderFormId: orderFormIdSchema,
+  cnpj: z
+    .string()
+    .transform((value) => value.replace(/\D/g, ''))
+    .refine((value) => value.length === 14, 'CNPJ deve ter 14 digitos')
+    .refine(isValidCnpj, 'CNPJ invalido'),
+  /**
+   * E-mail do cliente para o `DS_EMAIL_NFD`, quando a empresa nao tem e-mail
+   * proprio nas fontes. Mandando, a rota poupa a leitura do orderForm.
+   */
+  fallbackEmail: z.string().email().optional(),
+});
+
+/**
+ * `POST /middleware/checkout/custom-data/cnpj`
+ *
+ * Consulta o CNPJ e grava **apenas** `customData.custom_cnpj_data`.
+ *
+ * Diferenca para o `corporate-data`: esta rota **nao toca no `shippingData`**
+ * — nao limpa e nao atualiza — nem no `clientProfileData`. O orderForm sai
+ * intacto fora desse campo. Serve para o caso em que o endereco de entrega
+ * ja esta definido e nao pode ser substituido pelo da Junta Comercial.
+ *
+ * O caminho da consulta e o MESMO do `corporate-data`, com as tres camadas:
+ * memoria -> Master Data `CB` -> SintegraWS + publica.cnpj.ws. Ou seja, um
+ * CNPJ ja conhecido responde em ~1s em vez de ate 26s, e sem gastar cota.
+ *
+ * ---------------------------------------------------------------------------
+ * REQUEST
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "cnpj": "50.972.373/0001-00",
+ *   "fallbackEmail": "cliente@dominio.com"
+ * }
+ * ```
+ * `fallbackEmail` e opcional: sem ele, a rota le o e-mail do proprio orderForm.
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200 — gravado
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "updated": true,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "field": "custom_cnpj_data",
+ *   "value": "{\"DS_EMAIL_NFD\":\"contato@groweag.com\",...}",
+ *   "confirmed": true,
+ *   "storedValue": "{...}",
+ *   "verification": { "...as quatro fontes consolidadas..." },
+ *   "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
+ *   "cache": { "hit": true, "source": "masterdata", "ageSeconds": 45 },
+ *   "durationMs": 1029
+ * }
+ * ```
+ *
+ * ---------------------------------------------------------------------------
+ * RESPONSE 200 — CNPJ reprovado, NADA gravado
+ * ---------------------------------------------------------------------------
+ * ```json
+ * {
+ *   "updated": false,
+ *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
+ *   "field": "custom_cnpj_data",
+ *   "verification": { "approved": false, "reason": "...", "message": "..." },
+ *   "sources": {}, "cache": {}, "durationMs": 0
+ * }
+ * ```
+ * Os `reason` sao os mesmos do `corporate-data`: `DOCUMENT_NOT_FOUND`,
+ * `SOURCES_UNAVAILABLE`, `REGISTRATION_INACTIVE`, `INCOMPLETE_FISCAL_DATA` e
+ * `MISSING_POSTAL_CODE`.
+ *
+ * ERROS
+ * - `400 VALIDATION_ERROR`          CNPJ ou `orderFormId` fora do formato
+ *                                   (digito verificador conferido antes de
+ *                                   gastar consulta paga)
+ * - `502 CUSTOM_DATA_NOT_PERSISTED` a VTEX aceitou mas gravou outro valor
+ */
+export const setCnpjCustomData = asyncHandler(async (req, res) => {
+  const startedAt = Date.now();
+  const { orderFormId, cnpj, fallbackEmail } = cnpjCustomDataBody.parse(req.body);
+
+  const { sources, statuses, cache } = await fetchCnpjSources(cnpj);
+
+  // So le o orderForm quando precisa do e-mail — e uma requisicao a menos
+  // quando o chamador ja informou. Leitura nao altera nada.
+  let email = fallbackEmail;
+  if (email === undefined) {
+    const orderForm = await getOrderForm(orderFormId);
+    const current = orderForm?.clientProfileData?.['email'];
+    if (typeof current === 'string' && current !== '') email = current;
+  }
+
+  const verification = verifyCnpj({ cnpj, sources, statuses, fallbackEmail: email });
+
+  const { app, field } = CUSTOM_DATA_FIELDS.cnpjData;
+
+  // CNPJ reprovado nao grava: o ERP receber payload fiscal de empresa baixada
+  // seria pior que nao receber nada.
+  if (!verification.approved) {
+    logger.info(
+      { orderFormId, cnpj, reason: verification.reason, sources: statuses },
+      'CNPJ reprovado; customData intacto',
+    );
+
+    res.status(200).json({
+      updated: false,
+      orderFormId,
+      field,
+      verification,
+      sources: statuses,
+      cache,
+      durationMs: Date.now() - startedAt,
+    });
+    return;
+  }
+
+  // Campo de customData e texto: o objeto vai serializado, como o ERP ja recebe.
+  const value = JSON.stringify(verification.erpCustomData);
+  const result = await putCustomData({ orderFormId, app, field, value });
+
+  if (result.storedValue !== null && !result.confirmed) {
+    throw new AppError(
+      502,
+      'CUSTOM_DATA_NOT_PERSISTED',
+      `A VTEX aceitou a gravacao de ${field} mas devolveu outro valor`,
+    );
+  }
+
+  const durationMs = Date.now() - startedAt;
+
+  logger.info(
+    {
+      orderFormId,
+      cnpj,
+      field,
+      confirmed: result.confirmed,
+      cacheHit: cache.hit,
+      cacheSource: cache.source,
+      durationMs,
+    },
+    'custom_cnpj_data gravado sem tocar em shippingData',
+  );
+
+  res.status(200).json({
+    updated: true,
+    orderFormId: result.orderFormId ?? orderFormId,
+    field,
+    value,
+    confirmed: result.confirmed,
+    storedValue: result.storedValue,
+    verification,
+    sources: statuses,
+    cache,
+    durationMs,
   });
 });
