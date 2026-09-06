@@ -3,15 +3,12 @@ import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { logger } from '../../config/logger.js';
 import { isValidCnpj, verifyCnpj } from '../../mappers/cnpj.js';
 import {
-  CLIENT_PROFILE_FIELDS,
   buildCorporateAddress,
   buildCorporateProfile,
   buildPersonalProfileReset,
   buildReceiverName,
   isMasked,
-  needsMasterDataProfile,
 } from '../../mappers/corporateProfile.js';
-import { findClient } from '../../services/vtex/masterdata.js';
 import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
 import {
   CUSTOM_DATA_FIELDS,
@@ -229,26 +226,6 @@ export const setCorporateData = asyncHandler(async (req, res) => {
     personal?.email ??
     (typeof profileEmail === 'string' && !isMasked(profileEmail) ? profileEmail : undefined);
 
-  /**
-   * Comprador nao autenticado recebe o `clientProfileData` MASCARADO da VTEX
-   * (`"firstName": "G***"`, `"document": "***41"`). Reaproveitar isso gravaria
-   * lixo com cara de dado valido de volta no orderForm — por isso, faltando
-   * campo em claro, o valor real vem da entidade CL.
-   *
-   * A consulta so acontece quando ha campo mascarado ou ausente: comprador
-   * logado nao paga por ela.
-   */
-  let masterDataProfile: Record<string, unknown> | null = null;
-  if (fallbackEmail !== undefined && needsMasterDataProfile(currentProfile, personal ?? {})) {
-    const clients = await findClient({ email: fallbackEmail, fields: CLIENT_PROFILE_FIELDS });
-    masterDataProfile = clients[0] ?? null;
-
-    logger.info(
-      { orderFormId, encontrado: masterDataProfile !== null },
-      'clientProfileData do orderForm veio incompleto ou mascarado; consultando a CL',
-    );
-  }
-
   const verification = verifyCnpj({ cnpj, sources, statuses, fallbackEmail });
 
   // 2) Reprovado: devolve o motivo SEM tocar no orderForm.
@@ -272,7 +249,6 @@ export const setCorporateData = asyncHandler(async (req, res) => {
   const profile = buildCorporateProfile({
     verification,
     currentProfile,
-    masterDataProfile,
     personal: personal ?? {},
   });
   const address = buildCorporateAddress({
@@ -426,18 +402,7 @@ export const discardCorporateData = asyncHandler(async (req, res) => {
   const { orderFormId } = discardBody.parse(req.body);
 
   const orderForm = await getOrderForm(orderFormId);
-  const currentProfile = orderForm?.clientProfileData ?? null;
-
-  // Mesma protecao do POST: desfazer o perfil corporativo nao pode gravar os
-  // campos mascarados de volta como se fossem os dados reais do comprador.
-  const email = currentProfile?.['email'];
-  let masterDataProfile: Record<string, unknown> | null = null;
-  if (typeof email === 'string' && !isMasked(email) && needsMasterDataProfile(currentProfile, {})) {
-    const clients = await findClient({ email, fields: CLIENT_PROFILE_FIELDS });
-    masterDataProfile = clients[0] ?? null;
-  }
-
-  const profile = buildPersonalProfileReset(currentProfile, masterDataProfile);
+  const profile = buildPersonalProfileReset(orderForm?.clientProfileData);
 
   const { app, field } = CUSTOM_DATA_FIELDS.cnpjData;
 
