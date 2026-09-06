@@ -165,6 +165,7 @@ da URL, decisão pronta em vez de dado bruto). Detalhes em
 
 | Rota | Método | Substitui no `checkout-ui` |
 | --- | --- | --- |
+| `/middleware/checkout/customer-setup` | POST | o `_controlPfUniqueCEP` e o travamento de campos do `checkout-ui` |
 | `/middleware/checkout/corporate-data` | POST, DELETE | `_handleCNPJSearchBtnClickEv` e `_handleDiscardCNPJ` inteiros |
 | `/middleware/checkout/custom-data/birth-date` | POST | o `PUT` de `custom_birth_date` feito direto na VTEX |
 | `/middleware/checkout/custom-data/delivery-date` | POST | `setScheduleDateCheckout` |
@@ -173,6 +174,23 @@ da URL, decisão pronta em vez de dado bruto). Detalhes em
 | `/middleware/checkout/setInfo` | POST, PUT | `/middleware/checkout/setInfo/:email/:birthDate` |
 
 Todas públicas, todas com resposta em objeto plano.
+
+#### `customer-setup` — chamada no login
+
+```bash
+curl -X POST http://localhost:3000/middleware/checkout/customer-setup -H 'Content-Type: application/json' -d '{"orderFormId":"cc551425e8a445878344b79b79c48f6d"}'
+```
+
+Identifica o cliente pelo cadastro e prepara o orderForm conforme a regra:
+
+| Cliente | O que a rota faz | `addressLocked` |
+| --- | --- | --- |
+| **PF com endereço salvo** | grava o endereço da entidade AD no `shippingData` | `true` |
+| **PJ** (CNPJ na CL) | revalida o CNPJ e grava perfil + endereço da Junta Comercial | `true` |
+| **Novo**, ou PF sem endereço | não grava nada | `false` |
+
+`addressLocked` é o que o front usa para desabilitar os campos — a rota devolve
+a decisão, o front só reage.
 
 #### `corporate-data` — a porta única do CNPJ
 

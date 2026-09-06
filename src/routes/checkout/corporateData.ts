@@ -2,13 +2,8 @@ import { z } from 'zod';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { logger } from '../../config/logger.js';
 import { isValidCnpj, verifyCnpj } from '../../mappers/cnpj.js';
-import {
-  buildCorporateAddress,
-  buildCorporateProfile,
-  buildPersonalProfileReset,
-  buildReceiverName,
-  isMasked,
-} from '../../mappers/corporateProfile.js';
+import { buildPersonalProfileReset, isMasked } from '../../mappers/corporateProfile.js';
+import { applyCorporateToOrderForm } from '../../services/checkout/applyCorporate.js';
 import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
 import {
   CUSTOM_DATA_FIELDS,
@@ -16,10 +11,8 @@ import {
   deleteCustomData,
   getOrderForm,
   orderFormIdSchema,
-  putCustomData,
   sendAttachment,
 } from '../../services/vtex/checkout.js';
-import { AppError } from '../../services/vtex/errors.js';
 
 /**
  * POST /middleware/checkout/corporate-data
@@ -246,93 +239,21 @@ export const setCorporateData = asyncHandler(async (req, res) => {
     return;
   }
 
-  const profile = buildCorporateProfile({
+  const written = await applyCorporateToOrderForm({
+    orderFormId,
     verification,
     currentProfile,
     personal: personal ?? {},
   });
-  const address = buildCorporateAddress({
-    verification,
-    receiverName: buildReceiverName(profile),
-  });
-
-  // 3) Escritas, em ordem. A ORDEM IMPORTA — ver o bloco abaixo.
-  //
-  // O perfil vem PRIMEIRO de proposito: gravar `clientProfileData` com um
-  // e-mail que tem cadastro faz a VTEX carregar sozinha os enderecos daquele
-  // cliente para dentro de `selectedAddresses` e `availableAddresses`.
-  // (Verificado: um POST so de clientProfileData, sem tocar em shippingData,
-  // ja traz o endereco pessoal do comprador.)
-  //
-  // Se o endereco da empresa fosse gravado antes, esse carregamento entraria
-  // DEPOIS e o pedido PJ terminaria com o endereco residencial do comprador
-  // junto — as vezes ate como o escolhido.
-  await sendAttachment({
-    orderFormId,
-    attachmentId: 'clientProfileData',
-    payload: { ...profile },
-  });
-
-  // Limpa o que a VTEX acabou de carregar do perfil, e tambem o endereco
-  // anterior do orderForm. Sem isto o endereco do PF sobrevive em
-  // `availableAddresses` e pode voltar no calculo de frete.
-  await clearShippingData(orderFormId);
-
-  // Endereco da Junta Comercial — a ultima palavra sobre a entrega.
-  await sendAttachment({
-    orderFormId,
-    attachmentId: 'shippingData',
-    payload: {
-      selectedAddresses: [address],
-      // Sem isto, CEP que a VTEX nao reconhece apagaria o endereco recem-gravado.
-      clearAddressIfPostalCodeNotFound: false,
-    },
-  });
-
-  const { app, field } = CUSTOM_DATA_FIELDS.cnpjData;
-  // `custom_cnpj_data` guarda o objeto SERIALIZADO — campo de customData e
-  // texto. E o mesmo formato que o ERP ja recebe.
-  const customDataValue = JSON.stringify(verification.erpCustomData);
-  const customDataResult = await putCustomData({
-    orderFormId,
-    app,
-    field,
-    value: customDataValue,
-  });
-
-  if (customDataResult.storedValue !== null && !customDataResult.confirmed) {
-    throw new AppError(
-      502,
-      'CUSTOM_DATA_NOT_PERSISTED',
-      `A VTEX aceitou a gravacao de ${field} mas devolveu outro valor`,
-    );
-  }
 
   const durationMs = Date.now() - startedAt;
-
-  logger.info(
-    {
-      orderFormId,
-      cnpj,
-      corporateName: verification.company.corporateName,
-      customDataConfirmed: customDataResult.confirmed,
-      sources: statuses,
-      cacheHit: cache.hit,
-      durationMs,
-    },
-    'Perfil corporativo aplicado ao orderForm',
-  );
 
   res.status(200).json({
     applied: true,
     orderFormId,
     verification,
     /** Exatamente o que foi gravado no orderForm. */
-    written: {
-      clientProfileData: profile,
-      shippingAddress: address,
-      customData: { field, value: customDataValue, confirmed: customDataResult.confirmed },
-    },
+    written,
     sources: statuses,
     cache,
     durationMs,

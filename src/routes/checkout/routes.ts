@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import { discardCorporateData, setCorporateData } from './corporateData.js';
+import { customerSetup } from './customerSetup.js';
 import {
   setBirthDateCustomData,
   setCnpjCustomData,
@@ -73,6 +74,13 @@ export const CHECKOUT_ROUTES: readonly CheckoutRoute[] = [
   // Rotas novas — contrato consistente, dado pessoal fora da URL, verbo que
   // declara o que a chamada faz.
   // -------------------------------------------------------------------------
+  {
+    path: '/middleware/checkout/customer-setup',
+    methods: ['POST'],
+    handler: customerSetup,
+    auth: 'public',
+    summary: 'No login: identifica PF ou PJ pelo cadastro e prepara o orderForm com o endereco que a regra manda.',
+  },
   {
     path: '/middleware/checkout/corporate-data',
     methods: ['POST'],
