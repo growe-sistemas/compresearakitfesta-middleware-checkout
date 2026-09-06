@@ -32,7 +32,7 @@ Da menor para a maior dependência do front:
 | **1** | `/middleware/checkout/employees/lookup`, `/middleware/checkout/gift-cards/*` | consumidor é o store-theme (React), não o checkout — deploy independente e risco baixo |
 | **2** | `/middleware/checkout/customers/lookup`, `/middleware/checkout/customers/birth-date`, `/middleware/checkout/customers/document-availability` | trocas 1:1 no controller; resolvem o vazamento de dado pessoal (A1) e o `GET` que escreve (A4) |
 | **3** | `/middleware/checkout/customers/addresses/lookup` | funde duas chamadas; exige mexer em `PF.js`, `addressPF` e `SetAddress` ao mesmo tempo |
-| **4** | `/middleware/checkout/cnpj/verify` ✅ **backend pronto** | maior ganho e maior risco: reescreve `_handleCNPJSearchBtnClickEv` inteiro e tira a `publica.cnpj.ws` do navegador. Foi antecipada por decisão do time — falta a parte do `checkout-ui` |
+| **4** | `/middleware/checkout/corporate-data` ✅ **backend pronto** | maior ganho e maior risco: reescreve `_handleCNPJSearchBtnClickEv` inteiro e tira a `publica.cnpj.ws` do navegador. Foi antecipada por decisão do time — falta a parte do `checkout-ui` |
 | **5** | `/middleware/checkout/documents/cpf/verify` | a regra está **desligada** hoje — religar é decisão de negócio, não técnica |
 
 ---
@@ -67,7 +67,7 @@ Da menor para a maior dependência do front:
 - `_handleCNPJSearchBtnClickEv` vira, em essência:
 
 ```js
-const res = await fetch('/middleware/checkout/cnpj/verify', {
+const res = await fetch('/middleware/checkout/corporate-data', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -97,7 +97,7 @@ Estimativa: **~450 linhas a menos** no `checkout-ui`.
 **Antes de virar a chave em produção:** avisar o time do ERP dos três campos que
 mudam de valor (`ID_MICRO_EMPRESA`, `ID_MEI`, `NATUREZA_JURIDICA`) e do
 `ID_INSCRICAO_ESTADUAL`, que passa a chegar sempre — ver a tabela de diferenças
-em [04, seção 2.6](04-contratos-api.md#26-post-v2documentscnpjverify--implementado).
+em [04, seção 2.6b](04-contratos-api.md#26b-postdelete-middlewarecheckoutcorporate-data--implementado).
 
 ---
 

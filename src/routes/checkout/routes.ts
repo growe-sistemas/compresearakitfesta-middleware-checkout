@@ -1,5 +1,4 @@
 import type { RequestHandler } from 'express';
-import { verifyCnpjRoute } from './cnpj.js';
 import { discardCorporateData, setCorporateData } from './corporateData.js';
 import {
   setBirthDateCustomData,
@@ -73,13 +72,6 @@ export const CHECKOUT_ROUTES: readonly CheckoutRoute[] = [
   // Rotas novas — contrato consistente, dado pessoal fora da URL, verbo que
   // declara o que a chamada faz.
   // -------------------------------------------------------------------------
-  {
-    path: '/middleware/checkout/cnpj/verify',
-    methods: ['POST'],
-    handler: verifyCnpjRoute,
-    auth: 'public',
-    summary: 'Consulta o CNPJ nas quatro fontes e devolve a decisao consolidada, sem tocar no orderForm.',
-  },
   {
     path: '/middleware/checkout/corporate-data',
     methods: ['POST'],

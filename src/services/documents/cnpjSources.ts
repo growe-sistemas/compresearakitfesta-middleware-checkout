@@ -1,6 +1,7 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { TtlCache } from '../cache/ttlCache.js';
+import { readCnpjFromMasterData, saveCnpjToMasterData } from './cnpjCache.js';
 import { getCnpjFromRF, getCnpjFromSN, getCnpjFromST } from '../sintegra/client.js';
 import { getPublicaCnpj } from '../publicacnpj/client.js';
 import { AppError, UpstreamError } from '../vtex/errors.js';
@@ -14,25 +15,39 @@ import type { CnpjSources, SourceStatus } from '../../mappers/cnpj.js';
  * sem dedupe, sem diagnostico de qual fonte falhou — e com a `publica.cnpj.ws`
  * chamada direto do cliente.
  *
- * Aqui o disparo ganha tres camadas na frente:
+ * O disparo ganha camadas na frente, da mais barata para a mais cara:
  *
- * 1. **cache** por CNPJ (o SN sozinho leva ~21s; nao faz sentido repetir);
- * 2. **dedupe de requisicao em voo** — cliques repetidos no botao "Buscar", ou
- *    dois clientes com o mesmo CNPJ ao mesmo tempo, compartilham a MESMA
- *    coleta em vez de multiplicar consultas pagas;
- * 3. **isolamento de falha** — uma fonte que cai vira status em `sources`,
- *    nao exception. O antigo usava `allSettled` mas jogava o objeto de erro
- *    dentro do payload como se fosse dado.
+ * | | Camada | Alcance | Custo |
+ * | --- | --- | --- | --- |
+ * | L1 | memoria (`CNPJ_CACHE_TTL_MS`) | por instancia | ~0ms |
+ * | L2 | Master Data `CB` (`CNPJ_MASTERDATA_TTL_DAYS`) | compartilhado e duravel | ~200ms |
+ * | L3 | SintegraWS + publica.cnpj.ws | externo | 1 a 21s, cota paga |
+ *
+ * O L2 e a mesma entidade que o `checkout-ui` ja usa, no mesmo formato: o
+ * middleware aproveita os CNPJ que o front acumulou, e o front continua lendo
+ * o que o middleware grava. Ver `cnpjCache.ts`.
+ *
+ * Alem das camadas:
+ *
+ * - **dedupe de requisicao em voo** — cliques repetidos no botao "Buscar", ou
+ *   dois clientes com o mesmo CNPJ ao mesmo tempo, compartilham a MESMA coleta
+ *   em vez de multiplicar consultas pagas;
+ * - **isolamento de falha** — uma fonte que cai vira status em `sources`, nao
+ *   exception. O antigo usava `allSettled` mas jogava o objeto de erro dentro
+ *   do payload como se fosse dado.
  *
  * O cache guarda as **respostas cruas**, nunca a consolidacao. A consolidacao
  * depende do `fallbackEmail` de quem pediu (vai para `DS_EMAIL_NFD` quando a
  * empresa nao tem e-mail proprio) — cachear o resultado final entregaria o
  * e-mail de um cliente para outro.
  */
+/** De onde a resposta veio. `null` quando as fontes foram consultadas. */
+export type CacheSource = 'memory' | 'masterdata' | null;
+
 export interface CnpjSourcesResult {
   sources: CnpjSources;
   statuses: Record<'RF' | 'SN' | 'ST' | 'PUBLICA', SourceStatus>;
-  cache: { hit: boolean; ageSeconds?: number };
+  cache: { hit: boolean; source: CacheSource; ageSeconds?: number };
 }
 
 type CachedSources = Omit<CnpjSourcesResult, 'cache'>;
@@ -145,19 +160,64 @@ async function collect(cnpj: string): Promise<CachedSources> {
   };
 }
 
-/** Coleta com cache e dedupe. `cnpj` ja deve vir so com digitos. */
+/**
+ * Status derivados de um payload que veio do CB.
+ *
+ * O documento guarda as respostas, nao como cada fonte se saiu. Presenca vira
+ * `ok`, ausencia vira `not_found`. Nao da para distinguir `timeout` de `error`
+ * ali — mas se a resposta foi boa o bastante para ser cacheada, a distincao
+ * nao muda nada para quem consome.
+ */
+function statusesFromCache(sources: CnpjSources): CnpjSourcesResult['statuses'] {
+  const status = (value: unknown): SourceStatus => (value === null ? 'not_found' : 'ok');
+
+  return {
+    RF: status(sources.rf),
+    SN: status(sources.sn),
+    ST: status(sources.st),
+    PUBLICA: status(sources.publica),
+  };
+}
+
+/** Coleta com cache (memoria + Master Data) e dedupe. `cnpj` so com digitos. */
 export async function fetchCnpjSources(cnpj: string): Promise<CnpjSourcesResult> {
-  const cached = cache.get(cnpj) ?? negativeCache.get(cnpj);
-  if (cached !== null) {
-    return { ...cached.value, cache: { hit: true, ageSeconds: cached.ageSeconds } };
+  // L1 — memoria. Inclui o cache negativo (CNPJ que nenhuma fonte conhece).
+  const inMemory = cache.get(cnpj) ?? negativeCache.get(cnpj);
+  if (inMemory !== null) {
+    return {
+      ...inMemory.value,
+      cache: { hit: true, source: 'memory', ageSeconds: inMemory.ageSeconds },
+    };
   }
 
   const pending = inFlight.get(cnpj);
   if (pending !== undefined) {
     logger.debug({ cnpj }, 'Reaproveitando coleta de CNPJ em andamento');
-    return { ...(await pending), cache: { hit: false } };
+    return { ...(await pending), cache: { hit: false, source: null } };
   }
 
+  // L2 — Master Data. Evita ate 21s do plugin SN e uma consulta paga.
+  if (env.CNPJ_MASTERDATA_TTL_DAYS > 0) {
+    const stored = await readCnpjFromMasterData(cnpj);
+    if (stored !== null) {
+      const result: CachedSources = {
+        sources: stored.sources,
+        statuses: statusesFromCache(stored.sources),
+      };
+
+      // Promove para a memoria: o proximo clique nem chega ao Master Data.
+      cache.set(cnpj, result);
+
+      logger.info(
+        { cnpj, ageDays: Math.round(stored.ageDays) },
+        'CNPJ resolvido pelo cache do Master Data (CB)',
+      );
+
+      return { ...result, cache: { hit: true, source: 'masterdata', ageSeconds: stored.ageSeconds } };
+    }
+  }
+
+  // L3 — as fontes externas.
   const promise = collect(cnpj);
   inFlight.set(cnpj, promise);
 
@@ -168,15 +228,19 @@ export async function fetchCnpjSources(cnpj: string): Promise<CnpjSourcesResult>
 
     if (hasAnyValue) {
       cache.set(cnpj, result);
+      // Escrita no CB em segundo plano: quem esta comprando nao precisa
+      // esperar o cache ser gravado, e falha ali nao derruba a compra.
+      void saveCnpjToMasterData(cnpj, result.sources);
     } else if (Object.values(result.statuses).every((status) => status === 'not_found')) {
       // Resposta negativa DEFINITIVA: as quatro fontes responderam e nenhuma
-      // conhece o CNPJ. Vale cachear (curto) para nao repetir consulta paga.
+      // conhece o CNPJ. Fica so na memoria, com TTL curto — gravar "nao
+      // existe" numa base sem expiracao envenenaria empresa recem-aberta.
       negativeCache.set(cnpj, result);
     }
     // Falha de rede/timeout nao entra em cache nenhum: prender o CNPJ em erro
     // pelo TTL inteiro seria pior que consultar de novo.
 
-    return { ...result, cache: { hit: false } };
+    return { ...result, cache: { hit: false, source: null } };
   } finally {
     inFlight.delete(cnpj);
   }

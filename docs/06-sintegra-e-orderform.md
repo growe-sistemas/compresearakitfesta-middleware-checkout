@@ -262,7 +262,7 @@ em `customData.custom_birth_date` no formato `dd/mm/yyyy`.
 
 ## 6. O que a rota nova resolve disso — ✅ implementado
 
-`POST /middleware/checkout/cnpj/verify` (contrato completo em
+`POST /middleware/checkout/corporate-data` (contrato completo em
 [04, seção 2.6](04-contratos-api.md#26-post-v2documentscnpjverify--implementado))
 consolida as quatro fontes **no servidor** e devolve o `erpCustomData` pronto:
 

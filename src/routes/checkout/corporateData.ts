@@ -27,9 +27,12 @@ import { AppError } from '../../services/vtex/errors.js';
  * corporativo, endereco da Junta Comercial e o payload fiscal do ERP.
  *
  * E o `_handleCNPJSearchBtnClickEv` (`checkout-ui/.../controller.js:1512`)
- * inteiro, do lado do servidor: hoje o front dispara 4 consultas de CNPJ,
- * consolida no navegador e depois faz 4 escritas no orderForm. Aqui e uma
- * requisicao.
+ * inteiro, do lado do servidor: hoje o front consulta o cache no Master Data,
+ * dispara 4 consultas de CNPJ, consolida no navegador e depois faz 4 escritas
+ * no orderForm. Aqui e UMA requisicao.
+ *
+ * E a unica porta de entrada para CNPJ: a antiga `/middleware/checkout/cnpj/verify`
+ * fazia a mesma consulta sem gravar e foi removida por redundancia.
  *
  * Duas diferencas de comportamento que valem registro:
  *
@@ -40,6 +43,42 @@ import { AppError } from '../../services/vtex/errors.js';
  * 2. **CNPJ reprovado nao escreve nada.** O front so validava depois de ja ter
  *    limpado o `shippingData`, entao uma reprovacao no meio deixava o
  *    orderForm sem endereco.
+ *
+ * ---------------------------------------------------------------------------
+ * DE ONDE VEM O CNPJ: TRES CAMADAS
+ * ---------------------------------------------------------------------------
+ * Consultar a SintegraWS custa cota e ate 21s (o plugin SN sozinho). Por isso
+ * esta rota so chega nas fontes externas em ultimo caso:
+ *
+ * | | Camada | Alcance | Medido |
+ * | --- | --- | --- | --- |
+ * | L1 | memoria (`CNPJ_CACHE_TTL_MS`, 24h) | por instancia | ~0,4s |
+ * | L2 | Master Data `CB` (`CNPJ_MASTERDATA_TTL_DAYS`, 90d) | compartilhado, duravel | ~1,0s |
+ * | L3 | SintegraWS + publica.cnpj.ws | externo, cota paga | ate ~26s |
+ *
+ * O L2 e a MESMA entidade que o `checkout-ui` ja usa, no MESMO formato
+ * (`{ cnpj, cnpjInfo: { RF, SN, IE, PUBLICA } }`). Vale nos dois sentidos: a
+ * rota aproveita os CNPJ que o front acumulou desde sempre, e o front continua
+ * lendo o que a rota grava. Detalhes em `services/documents/cnpjCache.ts`.
+ *
+ * `cache.source` na resposta diz de onde veio: `memory`, `masterdata` ou
+ * `null` (consultou as fontes).
+ *
+ * Tres regras que valem a pena conhecer:
+ *
+ * 1. **Documento com mais de 90 dias e ignorado.** Situacao cadastral muda, e
+ *    e ela que decide se a venda PJ passa — cache eterno venderia para empresa
+ *    baixada. O documento nao e apagado: a consulta seguinte o ATUALIZA.
+ * 2. **Atualiza em vez de duplicar.** O front faz `POST` sempre, e por isso ha
+ *    CNPJ com dois documentos no CB criados com um minuto de diferenca pelo
+ *    mesmo cliente. Aqui e `PATCH` quando o documento existe — o que tambem e
+ *    o que faz o `updatedIn` existir, e e dele que a regra de 90 dias depende.
+ * 3. **CNPJ inexistente NAO vai para o CB.** Fica so no cache negativo em
+ *    memoria (10 min): gravar "nao existe" numa base sem expiracao envenenaria
+ *    a consulta de uma empresa recem-aberta.
+ *
+ * Falha de leitura ou escrita no CB nunca derruba a requisicao — vira log e a
+ * consulta segue pelas fontes.
  *
  * ---------------------------------------------------------------------------
  * REQUEST
@@ -71,7 +110,7 @@ import { AppError } from '../../services/vtex/errors.js';
  * {
  *   "applied": true,
  *   "orderFormId": "cc551425e8a445878344b79b79c48f6d",
- *   "verification": { "...igual ao de /middleware/checkout/cnpj/verify..." },
+ *   "verification": { "...consolidacao das quatro fontes, ver types/api.ts..." },
  *   "written": {
  *     "clientProfileData": {
  *       "email": "cliente@dominio.com",
@@ -109,10 +148,12 @@ import { AppError } from '../../services/vtex/errors.js';
  *     }
  *   },
  *   "sources": { "RF": "ok", "SN": "ok", "ST": "not_found", "PUBLICA": "ok" },
- *   "cache": { "hit": false },
+ *   "cache": { "hit": false, "source": null },
  *   "durationMs": 3123
  * }
  * ```
+ * Vindo do cache, `sources` e derivado por presenca (`ok` / `not_found`): o
+ * documento guarda as respostas, nao como cada fonte se saiu na epoca.
  * `written` e exatamente o que foi gravado no orderForm — da para conferir sem
  * reler o orderForm.
  *
@@ -128,8 +169,7 @@ import { AppError } from '../../services/vtex/errors.js';
  * }
  * ```
  * Sem `written`: o orderForm nao foi tocado — nem quando o CNPJ nao existe,
- * nem quando esta baixado. Os `reason` possiveis sao os mesmos de
- * `/middleware/checkout/cnpj/verify`: `DOCUMENT_NOT_FOUND`,
+ * nem quando esta baixado. Os `reason` possiveis: `DOCUMENT_NOT_FOUND`,
  * `SOURCES_UNAVAILABLE`, `REGISTRATION_INACTIVE`, `INCOMPLETE_FISCAL_DATA` e
  * `MISSING_POSTAL_CODE`.
  *

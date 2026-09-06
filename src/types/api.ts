@@ -18,7 +18,7 @@ export interface ErrorResponse {
 }
 
 // ---------------------------------------------------------------------------
-// POST /middleware/checkout/cnpj/verify
+// Verificacao de CNPJ — devolvida dentro de POST /middleware/checkout/corporate-data
 // ---------------------------------------------------------------------------
 
 export type CnpjVerificationReason =
@@ -119,7 +119,7 @@ export interface CnpjVerification {
  * do resultado, nao dentro de um envelope.
  */
 export interface CnpjVerificationDiagnostics {
-  cache: { hit: boolean; ageSeconds?: number };
+  cache: { hit: boolean; source: 'memory' | 'masterdata' | null; ageSeconds?: number };
   /** Como cada fonte se saiu — diagnostico que o fluxo antigo nao dava. */
   sources: Record<'RF' | 'SN' | 'ST' | 'PUBLICA', string>;
   /** Tempo total da consolidacao. */

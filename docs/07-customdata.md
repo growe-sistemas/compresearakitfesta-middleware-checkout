@@ -32,7 +32,7 @@ Quem alimenta o valor de cada uma:
 | Requisição | De onde vem o valor | Chamada ao middleware |
 | --- | --- | --- |
 | 1 | input `#client-birthDate` (ou `customData`, ou a entidade CL) | `getInfo/:email` para pré-preencher; `setInfo` para espelhar na CL |
-| 2 e 3 | consolidação das fontes de CNPJ | **`POST /middleware/checkout/cnpj/verify`** → `data.erpCustomData` |
+| 2 e 3 | consolidação das fontes de CNPJ | **`POST /middleware/checkout/corporate-data`** |
 | 4 | posição do endereço na lista do cliente | `getAddressPosition` |
 | 5 | `logisticsInfo[0].slas[0].deliveryWindow.endDateUtc` do próprio orderForm | nenhuma |
 
@@ -338,7 +338,7 @@ O que ele já faz é entregar conteúdo pronto para um dos campos:
 
 | Campo | Middleware entrega | Rota |
 | --- | --- | --- |
-| `custom_cnpj_data` | `data.erpCustomData`, os 11 campos montados e validados | `POST /middleware/checkout/cnpj/verify` ✅ |
+| `custom_cnpj_data` | os 11 campos montados e validados | `POST /middleware/checkout/corporate-data` ✅ |
 | `current_address_id` | a posição do endereço | `getAddressPosition` / `POST /middleware/checkout/customers/addresses/lookup` (proposto) |
 | `custom_birth_date` | — | a data vem do próprio cliente |
 | `custom_delivery_date` | — | vem do SLA do orderForm |

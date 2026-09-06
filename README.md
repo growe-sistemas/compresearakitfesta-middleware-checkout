@@ -90,6 +90,7 @@ Render — onde não existe `.env` — quem manda são as variáveis do dashboar
 | `PUBLICA_TIMEOUT_MS` | `8000` | Timeout da `publica.cnpj.ws` |
 | `CNPJ_CACHE_TTL_MS` | `86400000` (24 h) | Validade do cache de consolidação de CNPJ. `0` desliga o cache |
 | `CNPJ_CACHE_MAX_ENTRIES` | `1000` | Teto de CNPJs no cache em memória |
+| `CNPJ_MASTERDATA_TTL_DAYS` | `90` | Validade do CNPJ guardado na entidade `CB` do Master Data. Documento mais velho é reconsultado e atualizado. `0` desliga a leitura do CB |
 | `CNPJ_NEGATIVE_CACHE_TTL_MS` | `600000` (10 min) | Validade do cache de CNPJ **não encontrado**. Curto de propósito: protege a cota paga contra erro de digitação repetido sem segurar a resposta negativa de uma empresa recém-aberta |
 
 ### Integrações externas herdadas
@@ -162,9 +163,17 @@ Contrato consistente (envelope `{ data, meta }`, erro único, dado pessoal fora
 da URL, decisão pronta em vez de dado bruto). Detalhes em
 [`docs/04-contratos-api.md`](docs/04-contratos-api.md).
 
-| Rota | Método | Auth | Substitui |
-| --- | --- | --- | --- |
-| `/middleware/checkout/cnpj/verify` | POST | pública | `getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` + a chamada do navegador à `publica.cnpj.ws` |
+| Rota | Método | Substitui no `checkout-ui` |
+| --- | --- | --- |
+| `/middleware/checkout/corporate-data` | POST, DELETE | `_handleCNPJSearchBtnClickEv` e `_handleDiscardCNPJ` inteiros |
+| `/middleware/checkout/custom-data/birth-date` | POST | o `PUT` de `custom_birth_date` feito direto na VTEX |
+| `/middleware/checkout/custom-data/delivery-date` | POST | `setScheduleDateCheckout` |
+| `/middleware/checkout/custom-data/erp-address-id` | POST | `SetAddress` — `getAddressPosition` **e** a gravação, numa chamada |
+| `/middleware/checkout/setInfo` | POST, PUT | `/middleware/checkout/setInfo/:email/:birthDate` |
+
+Todas públicas, todas com resposta em objeto plano.
+
+#### `corporate-data` — a porta única do CNPJ
 
 ```bash
 curl -X POST http://localhost:3000/middleware/checkout/corporate-data -H 'Content-Type: application/json' -d '{"orderFormId":"cc551425e8a445878344b79b79c48f6d","cnpj":"50.972.373/0001-00","personal":{"email":"cliente@dominio.com","firstName":"Gustavo","lastName":"Borges"}}'
@@ -176,16 +185,19 @@ os dados de PF do comprador), endereço da Junta Comercial em `shippingData` e o
 **sequenciais**, e **CNPJ reprovado não grava nada** — ao contrário do front,
 que já tinha limpado o endereço antes de validar.
 
-E, no mesmo prefixo `/middleware/checkout/`, a operação do `setInfo` agora aceita **corpo** em vez
-de parâmetros de URL:
+**Três camadas antes de gastar cota**, da mais barata para a mais cara:
 
-| Rota | Método | Auth | Substitui |
+| | Camada | Alcance | Medido |
 | --- | --- | --- | --- |
-| `/middleware/checkout/setInfo` | POST, PUT | pública | `/middleware/checkout/setInfo/:email/:birthDate` |
-| `/middleware/checkout/custom-data/birth-date` | POST | pública | o `PUT` de `customData` que o `checkout-ui` fazia direto na VTEX |
-| `/middleware/checkout/corporate-data` | POST, DELETE | pública | o `_handleCNPJSearchBtnClickEv` e o `_handleDiscardCNPJ` inteiros |
-| `/middleware/checkout/custom-data/delivery-date` | POST | pública | o `setScheduleDateCheckout` do `checkout-ui` |
-| `/middleware/checkout/custom-data/erp-address-id` | POST | pública | o `SetAddress` do `checkout-ui` — `getAddressPosition` **e** a gravação, numa chamada |
+| L1 | memória (`CNPJ_CACHE_TTL_MS`, 24 h) | por instância | ~0,4 s |
+| L2 | Master Data `CB` (`CNPJ_MASTERDATA_TTL_DAYS`, 90 d) | compartilhado, durável | ~1,0 s |
+| L3 | SintegraWS + `publica.cnpj.ws` | externo, cota paga | até ~26 s |
+
+O L2 é a **mesma entidade e o mesmo formato** que o `checkout-ui` já usa, então
+o middleware aproveita os CNPJs que o front acumulou e o front continua lendo o
+que o middleware grava. `cache.source` na resposta diz de onde veio.
+
+#### `setInfo` — data de nascimento na entidade CL
 
 ```bash
 curl -X POST http://localhost:3000/middleware/checkout/setInfo -H 'Content-Type: application/json' -d '{"email":"cliente@dominio.com","birthDate":"24-11-1995"}'
@@ -209,15 +221,14 @@ Grava `customData.custom_birth_date` (no formato `dd/mm/yyyy` de sempre) e
 divergência vira `502 CUSTOM_DATA_NOT_PERSISTED` em vez de um "gravado" falso.
 Detalhes e os outros campos em [`docs/07-customdata.md`](docs/07-customdata.md).
 
-```bash
-curl -X POST http://localhost:3000/middleware/checkout/cnpj/verify -H 'Content-Type: application/json' -d '{"cnpj":"50.972.373/0001-00","fallbackEmail":"cliente@dominio.com"}'
-```
+Sobre a consulta de CNPJ dentro do `corporate-data`: as quatro fontes são
+consultadas em paralelo no servidor, com dedupe de requisição em voo e dígito
+verificador conferido **antes** de gastar consulta paga. `sources` diz como cada
+fonte se saiu; `missingFiscalFields` diz exatamente o que faltou quando reprova.
 
-Uma requisição no lugar de quatro, com as quatro fontes consultadas em paralelo
-no servidor, cache de 24 h por CNPJ, dedupe de requisição em voo, dígito
-verificador conferido antes de gastar consulta paga, e o payload
-`custom_cnpj_data` do ERP montado pronto. `meta.sources` diz como cada fonte se
-saiu; `missingFiscalFields` diz exatamente o que faltou quando reprova.
+> A rota `/middleware/checkout/cnpj/verify` existiu por um tempo e foi
+> **removida por redundância**: fazia a mesma consulta sem gravar no orderForm.
+> Hoje o CNPJ tem uma porta só.
 
 > ⚠️ Ao ligar no `checkout-ui`, três campos mudam de valor no ERP
 > (`ID_MICRO_EMPRESA`, `ID_MEI`, `NATUREZA_JURIDICA`) e `ID_INSCRICAO_ESTADUAL`

@@ -108,6 +108,15 @@ const envSchema = z.object({
    * segurar por muito tempo a resposta errada para uma empresa recem-aberta.
    */
   CNPJ_NEGATIVE_CACHE_TTL_MS: z.coerce.number().int().min(0).default(10 * 60 * 1000),
+
+  /**
+   * Validade do CNPJ guardado na entidade `CB` do Master Data.
+   *
+   * O CB nao expira sozinho. Situacao cadastral muda — e e ela que decide se a
+   * venda PJ passa —, entao um documento mais velho que isto e reconsultado e
+   * atualizado. `0` desliga a leitura do CB (a escrita continua).
+   */
+  CNPJ_MASTERDATA_TTL_DAYS: z.coerce.number().int().min(0).default(90),
 });
 
 export type Env = z.infer<typeof envSchema>;

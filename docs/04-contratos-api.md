@@ -9,7 +9,6 @@ Status por rota:
 
 | Rota | Status |
 | --- | --- |
-| [`POST /middleware/checkout/cnpj/verify`](#26-post-middlewarecheckoutcnpjverify--implementado) | ✅ **implementado e testado** |
 | [`POST\|DELETE /middleware/checkout/corporate-data`](#26b-postdelete-middlewarecheckoutcorporate-data--implementado) | ✅ **implementado e testado** |
 | todas as demais | proposta |
 
@@ -300,16 +299,21 @@ regular, sem ano de óbito) passam para cá.
 
 ---
 
-### 2.6 `POST /middleware/checkout/cnpj/verify` — ✅ IMPLEMENTADO
+### 2.6 A verificação de CNPJ — ✅ IMPLEMENTADA
+
+Não é uma rota própria: é o objeto `verification` que a
+[2.6b](#26b-postdelete-middlewarecheckoutcorporate-data--implementado)
+devolve. A rota `POST /middleware/checkout/cnpj/verify` existiu por um tempo e
+foi **removida por redundância** — fazia a mesma consulta sem gravar.
 
 **A maior mudança.** Substitui as quatro requisições de hoje
 (`getDataSintegraRF` + `getDataSintegraSN` + `getDataSintegraST` +
 `publica.cnpj.ws` chamada do navegador) por **uma**, com a consolidação, os
 fallbacks de máscara `*` e o `custom_cnpj_data` já montados no servidor.
 
-Código: [`src/routes/checkout/cnpj.ts`](../src/routes/checkout/cnpj.ts) (HTTP),
-[`src/services/documents/cnpjSources.ts`](../src/services/documents/cnpjSources.ts)
-(coleta, cache e dedupe) e [`src/mappers/cnpj.ts`](../src/mappers/cnpj.ts)
+Código: [`src/services/documents/cnpjSources.ts`](../src/services/documents/cnpjSources.ts)
+(coleta e camadas de cache), [`src/services/documents/cnpjCache.ts`](../src/services/documents/cnpjCache.ts)
+(o cache no Master Data `CB`) e [`src/mappers/cnpj.ts`](../src/mappers/cnpj.ts)
 (consolidação — função pura).
 
 ```jsonc
@@ -601,7 +605,7 @@ Falha de autenticação na Seara deixa de ser `200 { error: true }` e vira
 | `getDataInMasterData` | `POST /middleware/checkout/customers/document-availability` | para de vazar dado de terceiro |
 | `md/update` | *(sem equivalente genérico)* | cada escrita vira rota própria |
 | `getDataSintegraCPF/:cpf/:date` | `POST /middleware/checkout/documents/cpf/verify` | PII fora da URL, cache no servidor, decisão pronta |
-| `getDataSintegraRF/SN/ST/:cnpj` | `POST /middleware/checkout/cnpj/verify` | 4 requisições → 1; consolidação no servidor |
+| `getDataSintegraRF/SN/ST/:cnpj` | `POST /middleware/checkout/corporate-data` | 4 requisições → 1; consolidação e cache no servidor |
 | `getEmployee/:cpf` | `POST /middleware/checkout/employees/lookup` | CPF fora da URL; erro com status real |
 | `make-cluster-alive` | `GET /health` | keep-alive de worker VTEX IO não existe no Render |
 
