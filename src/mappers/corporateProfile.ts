@@ -58,6 +58,28 @@ function text(value: unknown): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+/**
+ * A VTEX devolve o `clientProfileData` MASCARADO quando o comprador nao esta
+ * autenticado na sessao:
+ *
+ * ```json
+ * { "firstName": "G***", "document": "***41", "corporateName": "G*** S*** D***" }
+ * ```
+ *
+ * Esses valores nao podem ser reaproveitados: gravar `firstName: "G***"` de
+ * volta corrompe o cadastro com um dado que PARECE valido. Aqui mascarado vale
+ * como ausente — o valor real vem da entidade CL, ou o campo fica nulo.
+ */
+export function isMasked(value: unknown): boolean {
+  return typeof value === 'string' && value.includes('***');
+}
+
+/** `text`, mas descartando valor mascarado pela VTEX. */
+function unmasked(value: unknown): string | null {
+  const parsed = text(value);
+  return parsed === null || isMasked(parsed) ? null : parsed;
+}
+
 /** Telefone em E.164. Aceita ja formatado ou so digitos. */
 function toE164(value: string | null): string | null {
   if (value === null) return null;
@@ -71,19 +93,25 @@ function toE164(value: string | null): string | null {
 }
 
 /**
- * Le um campo de PF, com precedencia: o que o chamador mandou primeiro, senao
- * o que ja esta no orderForm.
+ * Le um campo de PF, com tres fontes em ordem de confianca:
  *
- * O front lia direto dos inputs do DOM, porque no momento da busca de CNPJ o
- * cliente pode ter digitado sem ainda ter submetido o passo de perfil. Por
- * isso o `override` existe: quem chama pode mandar o valor da tela.
+ * 1. `override` — o que o chamador mandou (o valor da tela). O front lia do
+ *    DOM porque, na hora da busca de CNPJ, o passo de perfil pode nao ter
+ *    sido submetido ainda.
+ * 2. `current` — o `clientProfileData` do orderForm, **se nao estiver
+ *    mascarado**.
+ * 3. `masterData` — o documento CL, a fonte de verdade do cadastro.
+ *
+ * Nenhuma das tres tendo o valor, devolve `null`. Nulo e melhor que `"G***"`:
+ * ausencia honesta em vez de dado corrompido com cara de valido.
  */
 function pickPersonal(
   override: string | undefined,
   current: Record<string, unknown> | null | undefined,
+  masterData: Record<string, unknown> | null | undefined,
   key: string,
 ): string | null {
-  return text(override) ?? text(current?.[key]);
+  return text(override) ?? unmasked(current?.[key]) ?? unmasked(masterData?.[key]);
 }
 
 /**
@@ -96,12 +124,15 @@ function pickPersonal(
 export function buildCorporateProfile(options: {
   verification: CnpjVerification;
   currentProfile: Record<string, unknown> | null | undefined;
+  /** Documento CL do cliente. Fonte de verdade quando o orderForm vem mascarado. */
+  masterDataProfile?: Record<string, unknown> | null | undefined;
   personal: PersonalData;
 }): CorporateClientProfileData {
   const { verification, currentProfile, personal } = options;
+  const masterDataProfile = options.masterDataProfile ?? null;
   const { company } = verification;
 
-  const email = pickPersonal(personal.email, currentProfile, 'email');
+  const email = pickPersonal(personal.email, currentProfile, masterDataProfile, 'email');
   if (email === null) {
     // Falta de dado do chamador, nao falha do servico: 400, com o que fazer.
     throw new AppError(
@@ -111,16 +142,18 @@ export function buildCorporateProfile(options: {
     );
   }
 
-  const phone = pickPersonal(personal.phone, currentProfile, 'phone');
+  // A CL guarda o telefone em `phone` e, em cadastros antigos, em `homePhone`.
+  const phone =
+    pickPersonal(personal.phone, currentProfile, masterDataProfile, 'phone') ??
+    pickPersonal(undefined, null, masterDataProfile, 'homePhone');
 
   return {
     email,
-    firstName: pickPersonal(personal.firstName, currentProfile, 'firstName'),
-    lastName: pickPersonal(personal.lastName, currentProfile, 'lastName'),
-    document: (pickPersonal(personal.document, currentProfile, 'document') ?? '').replace(
-      /\D/g,
-      '',
-    ) || null,
+    firstName: pickPersonal(personal.firstName, currentProfile, masterDataProfile, 'firstName'),
+    lastName: pickPersonal(personal.lastName, currentProfile, masterDataProfile, 'lastName'),
+    document: (
+      pickPersonal(personal.document, currentProfile, masterDataProfile, 'document') ?? ''
+    ).replace(/\D/g, '') || null,
     documentType: 'cpf',
     phone: toE164(phone),
 
@@ -173,6 +206,39 @@ export function buildCorporateAddress(options: {
   };
 }
 
+/** Campos que valem buscar na CL quando o orderForm vem mascarado. */
+export const CLIENT_PROFILE_FIELDS = [
+  'id',
+  'email',
+  'firstName',
+  'lastName',
+  'document',
+  'phone',
+  'homePhone',
+] as const;
+
+/**
+ * Precisa consultar a entidade CL?
+ *
+ * So quando algum campo de PF esta mascarado ou ausente no orderForm. Comprador
+ * autenticado traz tudo em claro e a consulta e pulada — a CL so entra para
+ * consertar o que veio como `"G***"`.
+ */
+export function needsMasterDataProfile(
+  currentProfile: Record<string, unknown> | null | undefined,
+  personal: PersonalData,
+): boolean {
+  const faltando = (chave: keyof PersonalData, campo: string): boolean =>
+    text(personal[chave]) === null && unmasked(currentProfile?.[campo]) === null;
+
+  return (
+    faltando('firstName', 'firstName') ||
+    faltando('lastName', 'lastName') ||
+    faltando('document', 'document') ||
+    faltando('phone', 'phone')
+  );
+}
+
 /** `Nome Sobrenome` do comprador, para o `receiverName` do endereco. */
 export function buildReceiverName(profile: CorporateClientProfileData): string | null {
   const parts = [profile.firstName, profile.lastName].filter(
@@ -191,8 +257,10 @@ export function buildReceiverName(profile: CorporateClientProfileData): string |
  */
 export function buildPersonalProfileReset(
   currentProfile: Record<string, unknown> | null | undefined,
+  masterDataProfile?: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
-  const email = text(currentProfile?.['email']);
+  const md = masterDataProfile ?? null;
+  const email = unmasked(currentProfile?.['email']) ?? unmasked(md?.['email']);
   if (email === null) {
     throw new AppError(
       400,
@@ -203,11 +271,15 @@ export function buildPersonalProfileReset(
 
   return {
     email,
-    firstName: text(currentProfile?.['firstName']),
-    lastName: text(currentProfile?.['lastName']),
-    document: text(currentProfile?.['document']),
+    // Mesma regra do perfil corporativo: mascarado nao e reaproveitado.
+    firstName: unmasked(currentProfile?.['firstName']) ?? unmasked(md?.['firstName']),
+    lastName: unmasked(currentProfile?.['lastName']) ?? unmasked(md?.['lastName']),
+    document: unmasked(currentProfile?.['document']) ?? unmasked(md?.['document']),
     documentType: 'cpf',
-    phone: text(currentProfile?.['phone']),
+    phone:
+      unmasked(currentProfile?.['phone']) ??
+      unmasked(md?.['phone']) ??
+      unmasked(md?.['homePhone']),
 
     corporateName: null,
     tradeName: null,

@@ -12,6 +12,7 @@ import {
 import { findAddresses, findClient } from '../../services/vtex/masterdata.js';
 import { findAddressPosition } from '../../mappers/addressPosition.js';
 import { isValidCnpj, verifyCnpj } from '../../mappers/cnpj.js';
+import { isMasked } from '../../mappers/corporateProfile.js';
 import { fetchCnpjSources } from '../../services/documents/cnpjSources.js';
 import { parseFlexibleDate, toBrazilianDate } from '../../mappers/date.js';
 
@@ -300,7 +301,11 @@ export const setErpAddressIdCustomData = asyncHandler(async (req, res) => {
       );
     }
 
-    const email = typeof profile?.['email'] === 'string' ? profile['email'] : undefined;
+    // E-mail mascarado (comprador nao autenticado) nao serve de chave: buscar
+    // a CL por `"G***@..."` nao acha nada e a posicao cairia em 1 em silencio.
+    const rawEmail = profile?.['email'];
+    const email =
+      typeof rawEmail === 'string' && rawEmail !== '' && !isMasked(rawEmail) ? rawEmail : undefined;
 
     // Sem e-mail nao ha como chegar ao documento CL, e sem CL nao ha lista de
     // enderecos. Cliente convidado cai aqui e fica com a posicao 1 — mesmo
@@ -445,7 +450,9 @@ export const setCnpjCustomData = asyncHandler(async (req, res) => {
   if (email === undefined) {
     const orderForm = await getOrderForm(orderFormId);
     const current = orderForm?.clientProfileData?.['email'];
-    if (typeof current === 'string' && current !== '') email = current;
+    // Mascarado vale como ausente: `DS_EMAIL_NFD` com `"g***@..."` chegaria
+    // ao ERP como se fosse o e-mail de verdade.
+    if (typeof current === 'string' && current !== '' && !isMasked(current)) email = current;
   }
 
   const verification = verifyCnpj({ cnpj, sources, statuses, fallbackEmail: email });
